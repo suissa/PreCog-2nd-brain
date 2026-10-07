@@ -39,12 +39,16 @@ class Connection:
     def __init__(self, rows=(), fetchone_values=None):
         self.cursor_obj = Cursor(rows, fetchone_values)
         self.commits = 0
+        self.rollbacks = 0
 
     def cursor(self):
         return self.cursor_obj
 
     def commit(self):
         self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
 
 
 def exp(i="e1", t="t1"):
@@ -125,3 +129,20 @@ def test_experiences_filters_by_trajectory():
     conn = Connection([prow(e1)])
     assert PostgresStore(conn).experiences("t1") == (e1,)
     assert "WHERE trajectory_id = %s" in conn.cursor_obj.executed[0][0]
+
+
+def test_append_rolls_back_on_persistence_failure():
+    class FailingCursor(Cursor):
+        def execute(self, query, params=()):
+            raise RuntimeError("db failure")
+
+    class FailingConnection(Connection):
+        def __init__(self):
+            self.cursor_obj = FailingCursor()
+            self.commits = 0
+            self.rollbacks = 0
+
+    conn = FailingConnection()
+    with pytest.raises(RuntimeError, match="db failure"):
+        PostgresStore(conn).append_experience(exp())
+    assert conn.rollbacks == 1
