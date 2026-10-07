@@ -96,7 +96,8 @@ def test_dreaming_archives_stale_memory_without_touching_experience() -> None:
     store.put_memory(old)
     report = Dreamer(store).run(now=NOW, stale_after=timedelta(days=90))
     assert report.archived == 1
-    assert store.experiences() == (store.experiences()[0],)
+    assert store.experiences()[0].id == e.id
+    assert store.experiences()[0].recorded_at >= e.recorded_at
     assert not store.memories()
 
 
