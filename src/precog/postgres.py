@@ -39,7 +39,7 @@ class PostgresStore:
                 self._connection.commit()
                 return True
             existing = self.get_experience(experience.id)
-            if existing != replace(experience, recorded_at=existing.recorded_at):
+            if existing is None or existing != replace(experience, recorded_at=existing.recorded_at):
                 raise ValueError("experience id already exists with different content")
             return False
         except Exception:
