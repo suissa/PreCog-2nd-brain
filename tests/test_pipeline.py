@@ -490,3 +490,29 @@ def test_reconstruct_state_rejects_unrelated_evidence() -> None:
     )
     with pytest.raises(ValueError, match="does not belong"):
         reconstruct_state(make_state(), make_transition("t-reconstruct"), evidence)
+
+
+def test_evaluate_transition_result_prioritizes_undetermined_over_replan() -> None:
+    from intent_trajectory.domain import TransitionResult
+
+    state = make_state()
+    result = TransitionResult(
+        transition_id="t-undetermined-failure",
+        previous_state=state,
+        resulting_state=SemanticState(
+            "state:t-undetermined-failure",
+            state.facts,
+            (("appointment booked", ConditionStatus.UNKNOWN),),
+            state.provenance,
+            state.id,
+        ),
+        evidence=(),
+        status=TransitionStatus.FAILED,
+        unresolved_conditions=("appointment booked",),
+    )
+    evaluation = evaluate_transition_result(
+        result,
+        destination_may_be_complete=True,
+        replan_required=True,
+    )
+    assert evaluation.decision is EvaluationDecision.UNDETERMINED
