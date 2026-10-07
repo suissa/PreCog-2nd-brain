@@ -126,6 +126,17 @@ class Memory:
         if self.version < 1:
             raise ValueError("memory version must be >= 1")
 
+    def is_valid_at(self, at: datetime) -> bool:
+        if self.valid_from is not None and at < self.valid_from:
+            return False
+        if self.valid_to is not None and at >= self.valid_to:
+            return False
+        return True
+
+    @property
+    def is_current(self) -> bool:
+        return self.valid_to is None and self.lifecycle != MemoryLifecycle.ARCHIVED
+
     def transition_to(self, lifecycle: MemoryLifecycle) -> "Memory":
         if not self.lifecycle.can_transition_to(lifecycle):
             raise ValueError(
