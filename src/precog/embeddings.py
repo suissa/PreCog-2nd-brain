@@ -8,6 +8,7 @@ from .models import Memory
 
 
 class EmbeddingProvider(Protocol):
+    """Stable provider boundary used by semantic retrieval and rebuilds."""
     """Provider-neutral boundary for generating embeddings."""
 
     @property
