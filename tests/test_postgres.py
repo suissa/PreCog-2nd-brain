@@ -165,3 +165,39 @@ def test_lexical_search_uses_fts_and_preserves_provenance():
     assert "ORDER BY score DESC, m.memory_id ASC" in sql
     assert params[0] == "ERROR-42"
     assert params[-1] == 5
+
+
+def test_embedding_persistence_records_provider_and_source_metadata():
+    from precog.embeddings import DeterministicEmbeddingProvider, build_embedding
+    memory = Memory("m-embed", MemoryType.SEMANTIC, "payment failed", ("e1",), NOW,
+                    provenance=Provenance(("e1",), "test"))
+    embedding = build_embedding(memory, DeterministicEmbeddingProvider(4, "model-a"))
+    conn = Connection([("m-embed", list(embedding.vector), "model-a", "1", 4, 1, embedding.source_hash)])
+    store = PostgresStore(conn)
+    store.put_embedding(embedding)
+    loaded = store.embedding("m-embed")
+    assert loaded == embedding
+    sql, params = conn.cursor_obj.executed[0]
+    assert "INSERT INTO memory_embedding" in sql
+    assert params[2] == "1"
+    assert params[3] == 4
+
+
+def test_semantic_search_rejects_query_dimension_mismatch():
+    conn = Connection()
+    assert PostgresStore(conn).semantic_search((1.0, 2.0), model="m", provider_version="1",
+                                               dimensions=3) == ()
+    assert conn.cursor_obj.executed == []
+
+
+def test_semantic_search_excludes_stale_source_versions_and_archived():
+    conn = Connection([("m1", 0.92, {"source_ids": ["e1"], "derivation": "embedding",
+                                     "schema_version": 1}, "active", 1, 1)])
+    result = PostgresStore(conn).semantic_search((1.0, 2.0), model="model-a",
+                                                 provider_version="1", dimensions=2, limit=5)
+    assert result[0]["object_id"] == "m1"
+    sql, params = conn.cursor_obj.executed[0]
+    assert "e.source_version = m.version" in sql
+    assert "e.model = %s" in sql
+    assert "e.provider_version = %s" in sql
+    assert params[-1] == 5
