@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import replace
 from .domain import (
-    Constraint, ContextualizedIntent, DestinationContract, DestinationValidation,
+    Constraint, ContextualizedIntent, DestinationContract, DestinationValidation, Evidence,
     EvaluationDecision, Goal, Intent, NormalizedIntent, TerminalStatus,
     TransitionEvaluation, UnderstoodIntent,
 )
@@ -89,7 +89,7 @@ def validate_destination(
     completion_conditions_satisfied: bool,
     failure_conditions_triggered: bool = False,
     unresolved_contradictions: tuple[str, ...] = (),
-    evidence: tuple[object, ...] = (),
+    evidence: tuple[Evidence, ...] = (),
 ) -> DestinationValidation:
     if not all((required_outcome_satisfied, final_state_satisfied, required_evidence_satisfied,
                 constraints_satisfied, completion_conditions_satisfied)) or failure_conditions_triggered or unresolved_contradictions:
