@@ -220,12 +220,17 @@ def test_evaluate_transition_result_continues_progress() -> None:
 
 def test_evaluate_transition_result_replans_failed_transition() -> None:
     p = Provenance("source-4", "test", NOW, "unit")
-    result = execute_transition(
-        make_transition(),
-        make_state(),
-        observed_facts=(),
-        provenance=p,
-        temporal_position=NOW,
+    from intent_trajectory.domain import TransitionResult
+
+    state = make_state()
+    result = TransitionResult(
+        transition_id="t1",
+        previous_state=state,
+        resulting_state=SemanticState(
+            "state:t1", state.facts, (), state.provenance, state.id
+        ),
+        evidence=(),
+        status=TransitionStatus.FAILED,
     )
     evaluation = evaluate_transition_result(result)
     assert result.status is TransitionStatus.FAILED
