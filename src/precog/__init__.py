@@ -1,6 +1,7 @@
 """PreCog persistent cognitive substrate reference implementation."""
 from .models import Behavior, Experience, Knowledge, Memory, MemoryLifecycle, MemoryType, Relation, RelationType, RetrievalEvidence, Trajectory
 from .store import InMemoryStore
+from .postgres import PostgresStore
 from .retrieval import HybridRetriever
 from .consolidation import Consolidator, ConsolidationProposal
 from .dreaming import Dreamer, DreamReport
@@ -17,7 +18,7 @@ from .continual import ChampionChallenger, ModelCandidate, PromotionDecision
 
 __all__ = [
     "Behavior","Experience","Knowledge","Memory","MemoryLifecycle","MemoryType",
-    "Relation","RelationType","RetrievalEvidence","Trajectory","InMemoryStore",
+    "Relation","RelationType","RetrievalEvidence","Trajectory","InMemoryStore","PostgresStore",
     "HybridRetriever","Consolidator","ConsolidationProposal","Dreamer","DreamReport",
     "BehaviorPredictor","BehaviorPrediction","CapabilityCandidate","CapabilityValidator",
     "EvaluationReport","Evaluator","DataClass","FieldPolicy","PrivacyPolicy",
