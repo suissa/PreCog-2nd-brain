@@ -89,8 +89,8 @@ class PostgresStore:
 
     @staticmethod
     def _experience_from_row(row: Sequence[Any]) -> Experience:
-        payload = row[7]
-        provenance = row[8]
+        payload = row[6]
+        provenance = row[7]
         if isinstance(payload, str):
             payload = json.loads(payload)
         if isinstance(provenance, str):
@@ -109,9 +109,9 @@ class PostgresStore:
             event_type=row[5],
             payload=payload,
             provenance=p,
-            schema_version=row[9],
-            intent_id=row[10],
-            behavior_id=row[11],
-            action=row[12],
-            outcome=row[13],
+            schema_version=row[8],
+            intent_id=row[9],
+            behavior_id=row[10],
+            action=row[11],
+            outcome=row[12],
         )
