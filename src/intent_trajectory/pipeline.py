@@ -1,8 +1,8 @@
 from __future__ import annotations
 from dataclasses import replace
 from .domain import (
-    Constraint, ContextualizedIntent, DestinationContract, DestinationValidation, Evidence,
-    EvaluationDecision, Goal, Intent, NormalizedIntent, TerminalStatus,
+    Constraint, ContextOutcome, ContextualizedIntent, DestinationContract, DestinationValidation,
+    Evidence, EvaluationDecision, Goal, Intent, NormalizedIntent, OutcomeStatus, TerminalStatus,
     TransitionEvaluation, UnderstoodIntent,
 )
 
@@ -15,13 +15,13 @@ def understand(intent: Intent) -> UnderstoodIntent:
     if not outcome:
         ambiguities.append("requested_outcome")
     if missing:
-        return UnderstoodIntent(intent.id, intent.expression or "unresolved", "Unresolvable",
+        return UnderstoodIntent(intent.id, intent.expression or "unresolved", OutcomeStatus.UNRESOLVABLE,
                                 desired_outcome=outcome, ambiguities=tuple(ambiguities),
                                 missing_information=tuple(missing))
     if ambiguities:
-        return UnderstoodIntent(intent.id, intent.expression, "NeedsClarification",
+        return UnderstoodIntent(intent.id, intent.expression, OutcomeStatus.NEEDS_CLARIFICATION,
                                 desired_outcome=outcome, ambiguities=tuple(ambiguities))
-    return UnderstoodIntent(intent.id, intent.expression, "Understood",
+    return UnderstoodIntent(intent.id, intent.expression, OutcomeStatus.UNDERSTOOD,
                             desired_outcome=outcome, explicit_requirements=intent.explicit_requirements)
 
 def normalize(understood: UnderstoodIntent) -> NormalizedIntent:
@@ -36,12 +36,12 @@ def normalize(understood: UnderstoodIntent) -> NormalizedIntent:
     )
 
 def contextualize(normalized: NormalizedIntent, context: tuple[str, ...] = ()) -> ContextualizedIntent:
-    outcome = "Contextualized" if not normalized.unresolved_ambiguities else "ContextuallyIncomplete"
+    outcome = ContextOutcome.CONTEXTUALIZED if not normalized.unresolved_ambiguities else ContextOutcome.CONTEXTUALLY_INCOMPLETE
     return ContextualizedIntent(normalized.source_understood_intent_id,
                                 tuple(context), outcome, unresolved_context=normalized.unresolved_ambiguities)
 
 def define_goal(contextualized: ContextualizedIntent, intent: Intent) -> Goal:
-    if contextualized.outcome != "Contextualized":
+    if contextualized.outcome != ContextOutcome.CONTEXTUALIZED:
         raise ValueError("cannot define Goal from incomplete context")
     desired = intent.requested_outcome or contextualized.normalized_intent_id
     return Goal("goal:"+intent.id, intent.id, desired, "required semantic outcome is true",
