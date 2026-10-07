@@ -104,8 +104,8 @@ class PostgresStore:
             cursor.execute(
                 """INSERT INTO memory
                     (memory_id,memory_type,content,source_ids,created_at,valid_from,valid_to,
-                     confidence,salience,lifecycle,provenance,metadata,schema_version)
-                    VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s)
+                     confidence,salience,lifecycle,provenance,metadata,schema_version,version)
+                    VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s)
                     ON CONFLICT (memory_id) DO UPDATE SET
                     memory_type=EXCLUDED.memory_type, content=EXCLUDED.content,
                     source_ids=EXCLUDED.source_ids, created_at=EXCLUDED.created_at,
@@ -116,7 +116,8 @@ class PostgresStore:
                 (memory.id, memory.memory_type.value, memory.content,
                  self._json(memory.source_ids), memory.created_at, memory.valid_from,
                  memory.valid_to, memory.confidence, memory.salience, memory.lifecycle.value,
-                 self._json(memory.provenance), self._json(memory.metadata), memory.schema_version),
+                 self._json(memory.provenance), self._json(memory.metadata), memory.schema_version,
+                 memory.version),
             )
         self._connection.commit()
 
@@ -247,7 +248,7 @@ class PostgresStore:
     def _memory_from_row(cls, row: Sequence[Any]) -> Memory:
         return Memory(row[0], MemoryType(row[1]), row[2], tuple(cls._decode(row[3])),
                       row[4], row[5], row[6], row[7], row[8], MemoryLifecycle(row[9]),
-                      cls._provenance(row[10]), row[12], cls._decode(row[11]))
+                      cls._provenance(row[10]), row[12], row[13], cls._decode(row[11]))
 
     @classmethod
     def _knowledge_from_row(cls, row: Sequence[Any]) -> Knowledge:
