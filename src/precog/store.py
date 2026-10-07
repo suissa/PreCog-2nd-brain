@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import datetime, timezone
+
 from .models import Experience, Knowledge, Memory, MemoryLifecycle, Relation, Trajectory
 
 
@@ -19,7 +22,8 @@ class InMemoryStore:
             if existing != experience:
                 raise ValueError("experience id already exists with different content")
             return False
-        self._experiences[experience.id] = experience
+        stored = replace(experience, recorded_at=datetime.now(timezone.utc))
+        self._experiences[experience.id] = stored
         return True
 
     def experiences(self, trajectory_id: str | None = None) -> tuple[Experience, ...]:
