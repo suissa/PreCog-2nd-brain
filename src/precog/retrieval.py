@@ -82,6 +82,38 @@ class LexicalRetriever:
         return tuple(results[:limit])
 
 
+class SemanticRetriever:
+    """Provider-neutral semantic retrieval facade over PostgreSQL pgvector."""
+
+    def __init__(self, store: Any, provider: Any) -> None:
+        self.store = store
+        self.provider = provider
+
+    def search(self, query: str, *, limit: int = 10) -> tuple[RetrievalEvidence, ...]:
+        if not query.strip() or limit <= 0:
+            return ()
+        vector = tuple(float(value) for value in self.provider.embed(query))
+        if len(vector) != self.provider.dimensions:
+            raise ValueError(
+                f"query embedding returned {len(vector)} dimensions; "
+                f"expected {self.provider.dimensions}"
+            )
+        rows = self.store.semantic_search(
+            vector,
+            model=self.provider.model,
+            provider_version=self.provider.version,
+            dimensions=self.provider.dimensions,
+            limit=limit,
+        )
+        return tuple(
+            RetrievalEvidence(
+                row["object_id"], row["score"], 0.0, row["score"], 0.0, 0.0,
+                row["provenance"], row["lifecycle"], row["source_type"],
+            )
+            for row in rows
+        )
+
+
 class HybridRetriever:
     """Lexical + vector + temporal + relation-aware deterministic retrieval."""
 
