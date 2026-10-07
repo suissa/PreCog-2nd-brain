@@ -34,8 +34,8 @@ class Cursor:
 
 
 class Connection:
-    def __init__(self, rows=()):
-        self.cursor_obj = Cursor(rows)
+    def __init__(self, rows=(), fetchone_values=None):
+        self.cursor_obj = Cursor(rows, fetchone_values)
         self.commits = 0
 
     def cursor(self):
