@@ -1,0 +1,13 @@
+[
+  {"id":"S01","branch":"VALID_PROGRESS","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I12"},
+  {"id":"S02","branch":"VALID_NO_PROGRESS","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I7"},
+  {"id":"S03","branch":"VALID_RECOVERY","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I15"},
+  {"id":"S04","branch":"VALID_TERMINAL","test":"test_reached_requires_all_predicates_and_evidence","implementation_symbol":"validate_destination","invariant":"I14"},
+  {"id":"S05","branch":"INVALID_INPUT","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I19"},
+  {"id":"S06","branch":"INVALID_STATE","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I12"},
+  {"id":"S07","branch":"INVALID_TRANSITION","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I7"},
+  {"id":"S08","branch":"INVALID_EVIDENCE","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I2"},
+  {"id":"S09","branch":"INVALID_CONSTRAINT","test":"test_each_non_reached_terminal_outcome","implementation_symbol":"validate_destination","invariant":"I6"},
+  {"id":"S10","branch":"INVALID_DESTINATION","test":"test_step04_branch_matrix_is_observable","implementation_symbol":"classify_branch","invariant":"I4"},
+  {"id":"S11","branch":"INVALID_TERMINATION","test":"test_reached_rejects_missing_completion_predicate","implementation_symbol":"DestinationValidation","invariant":"I17"}
+]
