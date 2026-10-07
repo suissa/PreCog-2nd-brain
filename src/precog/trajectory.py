@@ -39,7 +39,7 @@ def reconstruct_trajectory_diagnostics(
 
     ordered = tuple(sorted(selected, key=lambda e: (e.occurred_at, e.id)))
     ordered_ids = tuple(e.id for e in ordered)
-    missing = ()
+    missing: tuple[str, ...] = ()
     if expected_experience_ids is not None:
         expected = tuple(dict.fromkeys(expected_experience_ids))
         missing = tuple(i for i in expected if i not in seen)
