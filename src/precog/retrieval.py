@@ -63,8 +63,10 @@ class LexicalRetriever:
                 lexical = 1.0
             if lexical <= 0:
                 continue
-            temporal = 1.0 if at is not None else 0.5
-            results.append(_evidence(memory, lexical=lexical, temporal=temporal))
+            results.append(RetrievalEvidence(
+                memory.id, lexical, lexical, 0.0, 1.0 if at is not None else 0.5, 0.0,
+                memory.provenance, memory.lifecycle, "memory"
+            ))
         return tuple(sorted(results, key=_rank_key)[:limit])
 
 
@@ -118,6 +120,19 @@ def _evidence(memory: Memory, *, lexical: float = 0.0, semantic: float = 0.0,
                              memory.lifecycle, "memory", components["metadata"])
 
 
+def _fused_evidence(base: RetrievalEvidence, *, lexical: float, semantic: float,
+                    temporal: float, relation: float, metadata: float) -> RetrievalEvidence:
+    components = {name: max(0.0, min(1.0, value)) for name, value in
+                  (("lexical", lexical), ("semantic", semantic), ("temporal", temporal),
+                   ("relation", relation), ("metadata", metadata))}
+    weights = {"lexical": 0.45, "semantic": 0.30, "temporal": 0.15,
+               "relation": 0.05, "metadata": 0.05}
+    score = min(1.0, sum(components[name] * weights[name] for name in weights))
+    return RetrievalEvidence(base.object_id, score, components["lexical"], components["semantic"],
+                             components["temporal"], components["relation"], base.provenance,
+                             base.lifecycle, base.source_type, components["metadata"])
+
+
 def _rank_key(item: RetrievalEvidence) -> tuple[float, str]:
     return (-item.score, item.object_id)
 
@@ -155,14 +170,14 @@ class HybridRetriever:
             if current is None:
                 candidate_map[candidate.object_id] = candidate
                 return
-            candidate_map[candidate.object_id] = RetrievalEvidence(
-                candidate.object_id, max(current.score, candidate.score),
-                max(current.lexical_score, candidate.lexical_score),
-                max(current.semantic_score, candidate.semantic_score),
-                max(current.temporal_score, candidate.temporal_score),
-                max(current.relation_score, candidate.relation_score),
-                current.provenance, current.lifecycle, current.source_type,
-                max(current.metadata_score, candidate.metadata_score))
+            candidate_map[candidate.object_id] = _fused_evidence(
+                current,
+                lexical=max(current.lexical_score, candidate.lexical_score),
+                semantic=max(current.semantic_score, candidate.semantic_score),
+                temporal=max(current.temporal_score, candidate.temporal_score),
+                relation=max(current.relation_score, candidate.relation_score),
+                metadata=max(current.metadata_score, candidate.metadata_score),
+            )
 
         for candidates in (lexical_candidates, semantic_candidates, metadata_candidates, temporal_candidates):
             if candidates is not None:
@@ -177,7 +192,7 @@ class HybridRetriever:
             temporal = self._temporal(memory, now) if now is not None else 0.0
             relation = max(0.0, min(1.0, relation_scores.get(memory.id, 0.0)))
             metadata = max(0.0, min(1.0, metadata_scores.get(memory.id, 0.0)))
-            if any((lexical, semantic, temporal, relation, metadata)):
+            if any((lexical, semantic, relation, metadata)):
                 add(_evidence(memory, lexical=lexical, semantic=semantic,
                                temporal=temporal, relation=relation, metadata=metadata))
 
