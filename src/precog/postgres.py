@@ -4,7 +4,10 @@ import json
 from dataclasses import replace
 from datetime import datetime, timezone
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .embeddings import EmbeddingRecord
 
 from .models import (
     Experience, Knowledge, Memory, MemoryLifecycle, MemoryType,
