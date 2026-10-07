@@ -52,6 +52,22 @@ class TrajectoryStatus(str, Enum):
     UNDETERMINED = "undetermined"
 
 
+class OutcomeStatus(str, Enum):
+    UNDERSTOOD = "Understood"
+    UNDERSTOOD_WITH_UNCERTAINTY = "UnderstoodWithUncertainty"
+    NEEDS_CLARIFICATION = "NeedsClarification"
+    CONTRADICTORY = "Contradictory"
+    UNRESOLVABLE = "Unresolvable"
+
+
+class ContextOutcome(str, Enum):
+    CONTEXTUALIZED = "Contextualized"
+    CONTEXTUALLY_INCOMPLETE = "ContextuallyIncomplete"
+    CONTEXT_CONFLICT = "ContextConflict"
+    CONTEXT_STALE = "ContextStale"
+    CONTEXT_INSUFFICIENT = "ContextInsufficient"
+
+
 class TerminalStatus(str, Enum):
     REACHED = "reached"
     NOT_REACHED = "not_reached"
@@ -112,7 +128,7 @@ class Intent:
 class UnderstoodIntent:
     source_intent_id: str
     interpretation: str
-    outcome: str
+    outcome: OutcomeStatus
     actor: Optional[str] = None
     desired_outcome: Optional[str] = None
     entities: tuple[str, ...] = ()
@@ -154,7 +170,7 @@ class NormalizedIntent:
 class ContextualizedIntent:
     normalized_intent_id: str
     relevant_context: tuple[str, ...]
-    outcome: str
+    outcome: ContextOutcome
     current_state_id: Optional[str] = None
     historical_facts: tuple[str, ...] = ()
     temporal_context: Optional[str] = None
@@ -251,6 +267,8 @@ class Transition:
     def __post_init__(self) -> None:
         for name, value in (("id", self.id), ("from_state_id", self.from_state_id), ("objective", self.objective)):
             _required(value, name)
+        if not self.preconditions:
+            raise ValueError("transition requires explicit preconditions")
         if not self.expected_change or not self.completion_conditions:
             raise ValueError("transition requires expected_change and completion_conditions")
 
@@ -325,6 +343,10 @@ class TransitionResult:
     def __post_init__(self) -> None:
         if self.previous_state.id != self.resulting_state.predecessor_state_id:
             raise ValueError("resulting state must point to previous state")
+        if self.status == TransitionStatus.SUCCEEDED and self.unresolved_conditions:
+            raise ValueError("succeeded transition cannot have unresolved conditions")
+        if self.status == TransitionStatus.BLOCKED and not (self.constraint_violations or self.unresolved_conditions):
+            raise ValueError("blocked transition requires an observable reason")
 
 
 @dataclass(frozen=True, slots=True)
@@ -361,6 +383,10 @@ class DestinationValidation:
         )
         if self.outcome == TerminalStatus.REACHED and not reached:
             raise ValueError("Reached requires every completion predicate")
+        if self.outcome == TerminalStatus.BLOCKED and self.constraints_satisfied:
+            raise ValueError("Blocked requires an unsatisfied constraint")
+        if self.outcome == TerminalStatus.INVALIDATED and not self.failure_conditions_triggered:
+            raise ValueError("Invalidated requires a triggered failure condition")
 
 
 @dataclass(frozen=True, slots=True)
@@ -375,6 +401,13 @@ class TerminalOutcome:
     constraint_status: str
     reason: tuple[str, ...]
     provenance: Provenance
+
+    def __post_init__(self) -> None:
+        for name, value in (("trajectory_id", self.trajectory_id), ("destination_id", self.destination_id),
+                            ("final_state_id", self.final_state_id), ("constraint_status", self.constraint_status)):
+            _required(value, name)
+        if not self.evidence_ids or not self.reason:
+            raise ValueError("terminal outcome requires evidence and reason")
 
 
 @dataclass(frozen=True, slots=True)
