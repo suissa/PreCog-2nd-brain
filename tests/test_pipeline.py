@@ -516,3 +516,84 @@ def test_evaluate_transition_result_prioritizes_undetermined_over_replan() -> No
         replan_required=True,
     )
     assert evaluation.decision is EvaluationDecision.UNDETERMINED
+
+
+def test_destination_validation_all_terminal_statuses() -> None:
+    _, _, _, destination, _ = make_destination()
+    evidence = ()
+    assert validate_destination(
+        destination, required_outcome_satisfied=False, final_state_satisfied=False,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=False,
+    ).outcome is TerminalStatus.NOT_REACHED
+
+    blocked = validate_destination(
+        destination, required_outcome_satisfied=False, final_state_satisfied=False,
+        required_evidence_satisfied=True, constraints_satisfied=False,
+        completion_conditions_satisfied=False,
+    )
+    assert blocked.outcome is TerminalStatus.BLOCKED
+
+    invalidated = validate_destination(
+        destination, required_outcome_satisfied=False, final_state_satisfied=False,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=False, failure_conditions_triggered=True,
+    )
+    assert invalidated.outcome is TerminalStatus.INVALIDATED
+
+    undetermined = validate_destination(
+        destination, required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=False, constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+    )
+    assert undetermined.outcome is TerminalStatus.UNDETERMINED
+
+
+def test_reached_requires_validation_evidence() -> None:
+    _, _, _, destination, _ = make_destination()
+    with pytest.raises(ValueError, match="validation evidence"):
+        validate_destination(
+            destination, required_outcome_satisfied=True, final_state_satisfied=True,
+            required_evidence_satisfied=True, constraints_satisfied=True,
+            completion_conditions_satisfied=True, evidence=(),
+        )
+
+
+def test_action_success_alone_cannot_reach_destination() -> None:
+    _, _, _, destination, _ = make_destination()
+    validation = validate_destination(
+        destination, required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=False, constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+        evidence=(),
+    )
+    assert validation.outcome is TerminalStatus.UNDETERMINED
+
+
+def test_terminalize_rejects_validation_for_other_destination() -> None:
+    from intent_trajectory.pipeline import terminalize
+    trajectory, i, _, _, destination = make_trajectory()
+    other = DestinationContract(
+        "destination:other", destination.goal_id, destination.required_outcome,
+        destination.required_final_state, destination.required_evidence,
+        destination.constraints, destination.completion_conditions,
+        destination.failure_conditions, destination.validation_rules,
+    )
+    validation = validate_destination(
+        other, required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+        evidence=(
+            __import__("intent_trajectory.domain", fromlist=["Evidence"]).Evidence(
+                "terminal-other", "t1", "appointment booked", NOW, i.provenance,
+                supports=("appointment booked",),
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="trajectory Destination"):
+        terminalize(
+            trajectory, validation,
+            evidence=validation.evidence, satisfied_conditions=("appointment booked",),
+            unsatisfied_conditions=(), constraint_status="satisfied",
+            reason=("wrong destination",), provenance=i.provenance,
+        )
