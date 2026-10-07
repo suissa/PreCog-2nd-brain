@@ -944,3 +944,19 @@ Intent
 ```
 
 Technology may vary. These semantic responsibilities must not be collapsed into an undifferentiated execution pipeline.
+
+
+## Implementation Issues
+
+The implementation is Python-first. The following issues are the executable work plan for completing this step and its dependencies.
+
+- [#18 — Implement Intent Trajectory Python domain contracts (STEP-04)](https://github.com/suissa/PreCog-2nd-brain/issues/18)
+- [#19 — Implement Intent Trajectory semantic pipeline (STEP-01/02)](https://github.com/suissa/PreCog-2nd-brain/issues/19)
+- [#20 — Implement STEP-03 branch validators and scenario engine](https://github.com/suissa/PreCog-2nd-brain/issues/20)
+- [#21 — Implement semantic execution, Evidence and State reconstruction](https://github.com/suissa/PreCog-2nd-brain/issues/21)
+- [#22 — Implement deterministic TransitionEvaluation and Replanning](https://github.com/suissa/PreCog-2nd-brain/issues/22)
+- [#23 — Implement DestinationValidation and terminal protection](https://github.com/suissa/PreCog-2nd-brain/issues/23)
+- [#24 — Build complete Intent Trajectory scenario test suite](https://github.com/suissa/PreCog-2nd-brain/issues/24)
+- [#25 — Add Python quality gate and traceability coverage for Intent Trajectory](https://github.com/suissa/PreCog-2nd-brain/issues/25)
+
+Completion rule: the step is not complete until its applicable issues are implemented, tested, and the STEP-04 minimum coverage matrix is satisfied.
