@@ -37,7 +37,7 @@ def normalize(understood: UnderstoodIntent) -> NormalizedIntent:
 
 def contextualize(normalized: NormalizedIntent, context: tuple[str, ...] = ()) -> ContextualizedIntent:
     outcome = "Contextualized" if not normalized.unresolved_ambiguities else "ContextuallyIncomplete"
-    return ContextualizedIntent(normalized.id if hasattr(normalized, "id") else normalized.source_understood_intent_id,
+    return ContextualizedIntent(normalized.source_understood_intent_id,
                                 tuple(context), outcome, unresolved_context=normalized.unresolved_ambiguities)
 
 def define_goal(contextualized: ContextualizedIntent, intent: Intent) -> Goal:
