@@ -24,6 +24,18 @@ class MemoryLifecycle(str, Enum):
     SUPERSEDED = "superseded"
     ARCHIVED = "archived"
 
+    def can_transition_to(self, target: "MemoryLifecycle") -> bool:
+        allowed = {
+            MemoryLifecycle.CAPTURED: {MemoryLifecycle.CANDIDATE, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.CANDIDATE: {MemoryLifecycle.VALIDATED, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.VALIDATED: {MemoryLifecycle.ACTIVE, MemoryLifecycle.CANDIDATE, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.ACTIVE: {MemoryLifecycle.DORMANT, MemoryLifecycle.SUPERSEDED, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.DORMANT: {MemoryLifecycle.ACTIVE, MemoryLifecycle.SUPERSEDED, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.SUPERSEDED: {MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.ARCHIVED: set(),
+        }
+        return target in allowed[self]
+
 
 class RelationType(str, Enum):
     DERIVED_FROM = "derived_from"
@@ -101,6 +113,7 @@ class Memory:
     lifecycle: MemoryLifecycle = MemoryLifecycle.CANDIDATE
     provenance: Provenance = field(default_factory=lambda: Provenance(("unknown",), "unknown"))
     schema_version: int = 1
+    version: int = 1
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -110,6 +123,30 @@ class Memory:
             raise ValueError("confidence and salience must be between 0 and 1")
         if self.valid_from and self.valid_to and self.valid_to < self.valid_from:
             raise ValueError("invalid memory temporal interval")
+        if self.version < 1:
+            raise ValueError("memory version must be >= 1")
+
+    def transition_to(self, lifecycle: MemoryLifecycle) -> "Memory":
+        if not self.lifecycle.can_transition_to(lifecycle):
+            raise ValueError(
+                f"illegal memory lifecycle transition: {self.lifecycle.value} -> {lifecycle.value}"
+            )
+        return Memory(
+            id=self.id,
+            memory_type=self.memory_type,
+            content=self.content,
+            source_ids=self.source_ids,
+            created_at=self.created_at,
+            valid_from=self.valid_from,
+            valid_to=self.valid_to,
+            confidence=self.confidence,
+            salience=self.salience,
+            lifecycle=lifecycle,
+            provenance=self.provenance,
+            schema_version=self.schema_version,
+            version=self.version + 1,
+            metadata=self.metadata,
+        )
 
 
 @dataclass(frozen=True, slots=True)
