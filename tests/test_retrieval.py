@@ -62,3 +62,24 @@ def test_temporal_filter_excludes_future_and_expired_memories():
     memory(store, "m-expired", "release error", valid_to=NOW - timedelta(seconds=1))
     results = LexicalRetriever(store).search("release error", at=NOW)
     assert [item.object_id for item in results] == [current.id]
+
+
+def test_semantic_retriever_delegates_query_embedding_to_provider():
+    from precog.embeddings import DeterministicEmbeddingProvider
+    from precog.retrieval import SemanticRetriever
+
+    class FakeStore:
+        def semantic_search(self, vector, **kwargs):
+            assert len(vector) == 4
+            assert kwargs["model"] == "deterministic"
+            return ({
+                "object_id": "m1",
+                "score": 0.8,
+                "provenance": Provenance(("e1",), "test"),
+                "lifecycle": MemoryLifecycle.ACTIVE,
+                "source_type": "memory",
+            },)
+
+    result = SemanticRetriever(FakeStore(), DeterministicEmbeddingProvider(4)).search("payment failed")
+    assert result[0].object_id == "m1"
+    assert result[0].semantic_score == 0.8
