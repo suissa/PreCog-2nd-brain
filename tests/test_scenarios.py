@@ -124,7 +124,7 @@ def test_unknown_never_becomes_reached() -> None:
     p = Provenance("p", "test", NOW, "unit")
     state = SemanticState("s1", (), (("complete", ConditionStatus.UNKNOWN),), (p,))
     assert state.conditions[0][1] is ConditionStatus.UNKNOWN
-    validation = validate_destination(_destination(), True, False, True, True, False)
+    validation = validate_destination(_destination(), required_outcome_satisfied=True, final_state_satisfied=False, required_evidence_satisfied=True, constraints_satisfied=True, completion_conditions_satisfied=False)
     assert validation.outcome is TerminalStatus.NOT_REACHED
 
 
