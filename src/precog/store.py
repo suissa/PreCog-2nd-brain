@@ -19,7 +19,7 @@ class InMemoryStore:
     def append_experience(self, experience: Experience) -> bool:
         existing = self._experiences.get(experience.id)
         if existing is not None:
-            if existing != experience:
+            if existing != replace(experience, recorded_at=existing.recorded_at):
                 raise ValueError("experience id already exists with different content")
             return False
         stored = replace(experience, recorded_at=datetime.now(timezone.utc))
