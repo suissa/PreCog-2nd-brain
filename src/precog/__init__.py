@@ -13,6 +13,7 @@ from .evaluation import EvaluationReport, Evaluator
 from .contract import DataClass, FieldPolicy, PrivacyPolicy, validate_migration_version, validate_temporal_interval
 from .trajectory import reconstruct_trajectory, validate_experience_temporal_order
 from .relations import RelationGraph
+from .projection import MarkdownProjection, MarkdownProjector, ProjectionError, project_knowledge, project_memory
 from .ranker import BehaviorRanker, JevRankerAdapter
 from .next_action import BestNextAction, BestNextActionSelector
 from .evolution import CapabilityEvolution, EvolutionDecision, Manager, Healer, Judge
@@ -30,4 +31,5 @@ __all__ = [
     "validate_experience_temporal_order","RelationGraph","BehaviorRanker","JevRankerAdapter",
     "BestNextAction","BestNextActionSelector","CapabilityEvolution","EvolutionDecision",
     "Manager","Healer","Judge","ChampionChallenger","ModelCandidate","PromotionDecision",
+    "MarkdownProjection","MarkdownProjector","ProjectionError","project_knowledge","project_memory",
 ]
