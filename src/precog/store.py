@@ -13,6 +13,7 @@ class InMemoryStore:
         self._experiences: dict[str, Experience] = {}
         self._trajectories: dict[str, Trajectory] = {}
         self._memories: dict[str, Memory] = {}
+        self._memory_history: dict[str, tuple[Memory, ...]] = {}
         self._knowledge: dict[str, Knowledge] = {}
         self._relations: dict[str, Relation] = {}
 
@@ -43,7 +44,25 @@ class InMemoryStore:
     def put_memory(self, memory: Memory) -> None:
         if any(not self._exists(i) for i in memory.source_ids):
             raise ValueError("memory provenance references unknown source")
+        existing = self._memories.get(memory.id)
+        if existing is not None:
+            if memory.version != existing.version + 1:
+                raise ValueError("memory version must advance exactly by one")
+            if not existing.lifecycle.can_transition_to(memory.lifecycle):
+                raise ValueError(
+                    f"illegal memory lifecycle transition: "
+                    f"{existing.lifecycle.value} -> {memory.lifecycle.value}"
+                )
+            history = self._memory_history.get(memory.id, (existing,))
+            self._memory_history[memory.id] = history + (memory,)
+        else:
+            if memory.version != 1:
+                raise ValueError("new memory must start at version 1")
+            self._memory_history[memory.id] = (memory,)
         self._memories[memory.id] = memory
+
+    def memory_history(self, memory_id: str) -> tuple[Memory, ...]:
+        return self._memory_history[memory_id]
 
     def memories(self, include_archived: bool = False) -> tuple[Memory, ...]:
         if include_archived:
