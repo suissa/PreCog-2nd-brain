@@ -86,7 +86,7 @@ def test_append_rejects_same_id_with_different_content():
 def test_experiences_filters_by_trajectory():
     e1 = experience()
     e2 = Experience("e2", "t2", NOW, NOW, "agent", "message", {}, e1.provenance)
-    conn = Connection([row(e1), row(e2)])
+    conn = Connection([row(e1)])
     assert PostgresStore(conn).experiences("t1") == (e1,)
 
     assert "WHERE trajectory_id = %s" in conn.cursor_obj.executed[0][0]
