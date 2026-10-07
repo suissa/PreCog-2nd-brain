@@ -323,3 +323,101 @@ def test_replan_rejects_terminal_trajectory() -> None:
             reason="attempted post-terminal action",
             trajectory_status=TrajectoryStatus.REACHED,
         )
+
+
+def make_trajectory() -> tuple[object, object, object, object, object]:
+    i, g, constraints, d, _ = make_destination()
+    from intent_trajectory.domain import Trajectory
+    trajectory = Trajectory(
+        id="trajectory:i1:1",
+        intent_id=i.id,
+        goal_id=g.id,
+        destination_id=d.id,
+        current_state_id="s0",
+        plan_ids=("plan:1",),
+        transition_ids=("t1",),
+        evidence_ids=(),
+        status=TrajectoryStatus.ACTIVE,
+        version=1,
+        provenance=i.provenance,
+    )
+    return trajectory, i, g, constraints, d
+
+
+def test_terminalize_requires_destination_validation_and_evidence() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import terminalize
+    trajectory, i, _, _, d = make_trajectory()
+    validation = validate_destination(
+        d,
+        required_outcome_satisfied=True,
+        final_state_satisfied=True,
+        required_evidence_satisfied=True,
+        constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+    )
+    evidence = Evidence("e1", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
+    terminal = terminalize(
+        trajectory,
+        validation,
+        evidence=(evidence,),
+        satisfied_conditions=("appointment booked",),
+        unsatisfied_conditions=(),
+        constraint_status="satisfied",
+        reason=("all destination predicates validated",),
+        provenance=i.provenance,
+    )
+    assert terminal.status is TerminalStatus.REACHED
+    assert terminal.destination_id == d.id
+
+
+def test_terminalize_rejects_already_terminal_trajectory() -> None:
+    from intent_trajectory.domain import Evidence, Trajectory
+    from intent_trajectory.pipeline import terminalize
+    trajectory, i, g, constraints, d = make_trajectory()
+    terminal_trajectory = Trajectory(
+        trajectory.id, i.id, g.id, d.id, trajectory.current_state_id,
+        trajectory.plan_ids, trajectory.transition_ids, (), TrajectoryStatus.REACHED, 2, i.provenance
+    )
+    validation = validate_destination(
+        d,
+        required_outcome_satisfied=True,
+        final_state_satisfied=True,
+        required_evidence_satisfied=True,
+        constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+    )
+    evidence = Evidence("e2", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
+    with pytest.raises(ValueError, match="already terminal"):
+        terminalize(
+            terminal_trajectory, validation, evidence=(evidence,),
+            satisfied_conditions=("appointment booked",), unsatisfied_conditions=(),
+            constraint_status="satisfied", reason=("duplicate terminalization",),
+            provenance=i.provenance,
+        )
+
+
+def test_apply_terminal_outcome_closes_trajectory_once() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import apply_terminal_outcome, terminalize
+    trajectory, i, _, _, d = make_trajectory()
+    validation = validate_destination(
+        d,
+        required_outcome_satisfied=True,
+        final_state_satisfied=True,
+        required_evidence_satisfied=True,
+        constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+    )
+    evidence = Evidence("e3", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
+    terminal = terminalize(
+        trajectory, validation, evidence=(evidence,),
+        satisfied_conditions=("appointment booked",), unsatisfied_conditions=(),
+        constraint_status="satisfied", reason=("validated",), provenance=i.provenance,
+    )
+    closed = apply_terminal_outcome(trajectory, terminal)
+    assert closed.status is TrajectoryStatus.REACHED
+    assert closed.version == 2
+    assert closed.evidence_ids == ("e3",)
+    with pytest.raises(ValueError, match="already terminal"):
+        apply_terminal_outcome(closed, terminal)
