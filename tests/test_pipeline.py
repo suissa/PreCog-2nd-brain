@@ -26,3 +26,30 @@ def test_destination_reached() -> None:
                              required_evidence_satisfied=True, constraints_satisfied=True,
                              completion_conditions_satisfied=True)
     assert v.outcome is TerminalStatus.REACHED
+
+def test_execute_transition_reconstructs_semantic_state_and_evidence() -> None:
+    from intent_trajectory.domain import Provenance, SemanticState, Transition, TransitionStatus, ConditionStatus
+    from intent_trajectory.pipeline import execute_transition
+    p = Provenance("source-1", "test", NOW, "unit")
+    state = SemanticState("s0", ("customer known",), (), (p,))
+    t = Transition("t1", "s0", "book appointment", ("customer known",),
+                   (), ("appointment booked",), ("appointment booked",))
+    result = execute_transition(t, state, observed_facts=("appointment booked",), provenance=p, temporal_position=NOW)
+    assert result.status is TransitionStatus.SUCCEEDED
+    assert result.resulting_state.predecessor_state_id == "s0"
+    assert result.resulting_state.conditions == (("appointment booked", ConditionStatus.TRUE),)
+    assert len(result.evidence) == 1
+
+def test_execute_transition_preserves_unknown_and_contradiction() -> None:
+    from intent_trajectory.domain import Provenance, SemanticState, Transition, TransitionStatus, ConditionStatus
+    from intent_trajectory.pipeline import execute_transition
+    p = Provenance("source-2", "test", NOW, "unit")
+    state = SemanticState("s0", (), (), (p,))
+    t = Transition("t2", "s0", "book appointment", ("customer known",),
+                   (), ("appointment booked",), ("appointment booked",))
+    result = execute_transition(t, state, observed_facts=(), provenance=p,
+                                temporal_position=NOW, contradicted_facts=("appointment booked",))
+    assert result.status is TransitionStatus.UNDETERMINED
+    assert result.unresolved_conditions == ()
+    assert result.resulting_state.conditions == (("appointment booked", ConditionStatus.UNKNOWN),)
+    assert result.resulting_state.contradictions == ("appointment booked",)
