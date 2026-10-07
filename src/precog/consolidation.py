@@ -80,7 +80,7 @@ class Consolidator:
             and not proposal.contradictions
         )
 
-    def materialize_memory(self, proposal: ConsolidationProposal, *, now: datetime):
+    def materialize_memory(self, proposal: ConsolidationProposal, *, now: datetime) -> Memory:
         from .models import Memory, MemoryLifecycle, MemoryType, Provenance, stable_id
         lifecycle = MemoryLifecycle.ACTIVE if self.validate(proposal) else MemoryLifecycle.CANDIDATE
         return Memory(
