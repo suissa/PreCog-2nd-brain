@@ -135,3 +135,22 @@ def test_experience_recorded_at_is_assigned_by_store() -> None:
     stored = store.experiences()[0]
     assert stored.occurred_at == e.occurred_at
     assert stored.recorded_at >= e.recorded_at
+
+
+def test_memory_lifecycle_rejects_illegal_transition_and_retains_history() -> None:
+    store = InMemoryStore()
+    store.append_experience(experience("e10"))
+    memory = Memory(
+        "m10", MemoryType.SEMANTIC, "fact", ("e10",), NOW,
+        lifecycle=MemoryLifecycle.CANDIDATE,
+        provenance=Provenance(("e10",), "consolidation"),
+    )
+    store.put_memory(memory)
+    validated = memory.transition_to(MemoryLifecycle.VALIDATED)
+    store.put_memory(validated)
+    active = validated.transition_to(MemoryLifecycle.ACTIVE)
+    store.put_memory(active)
+    assert tuple(m.version for m in store.memory_history("m10")) == (1, 2, 3)
+    assert store.memories() == (active,)
+    with pytest.raises(ValueError, match="illegal memory lifecycle transition"):
+        store.put_memory(active.transition_to(MemoryLifecycle.ARCHIVED).transition_to(MemoryLifecycle.ACTIVE))
