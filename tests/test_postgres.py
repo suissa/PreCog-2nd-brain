@@ -146,3 +146,22 @@ def test_append_rolls_back_on_persistence_failure():
     with pytest.raises(RuntimeError, match="db failure"):
         PostgresStore(conn).append_experience(exp())
     assert conn.rollbacks == 1
+
+def test_lexical_search_uses_fts_and_preserves_provenance():
+    provenance = {"source_ids": ["e1"], "derivation": "test", "schema_version": 1}
+    conn = Connection([("m1", 0.75, provenance, "active")])
+    result = PostgresStore(conn).lexical_search(
+        "ERROR-42", at=NOW, tenant_id="t1", actor="agent",
+        lifecycle=("active",), limit=5,
+    )
+    assert result[0]["object_id"] == "m1"
+    assert result[0]["score"] == 0.75
+    assert result[0]["provenance"].source_ids == ("e1",)
+    sql, params = conn.cursor_obj.executed[0]
+    assert "to_tsvector('simple', m.content)" in sql
+    assert "ts_rank_cd" in sql
+    assert "m.metadata ->> 'tenant_id'" in sql
+    assert "m.metadata ->> 'actor'" in sql
+    assert "ORDER BY score DESC, m.memory_id ASC" in sql
+    assert params[0] == "ERROR-42"
+    assert params[-1] == 5
