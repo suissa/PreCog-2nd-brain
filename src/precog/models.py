@@ -227,10 +227,12 @@ class RetrievalEvidence:
     provenance: Provenance
     lifecycle: MemoryLifecycle
     source_type: str
+    metadata_score: float = 0.0
 
     def __post_init__(self) -> None:
-        if not 0 <= self.score <= 1:
-            raise ValueError("score must be between 0 and 1")
+        for name, value in (("score", self.score), ("lexical_score", self.lexical_score), ("semantic_score", self.semantic_score), ("temporal_score", self.temporal_score), ("relation_score", self.relation_score), ("metadata_score", self.metadata_score)):
+            if not 0 <= value <= 1:
+                raise ValueError(f"{name} must be between 0 and 1")
 
 
 def stable_id(prefix: str, *parts: str) -> str:
