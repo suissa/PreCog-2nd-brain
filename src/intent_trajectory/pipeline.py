@@ -15,6 +15,7 @@ from .domain import (
     Intent,
     NormalizedIntent,
     OutcomeStatus,
+    TerminalOutcome,
     TerminalStatus,
     TrajectoryStatus,
     Transition,
@@ -185,6 +186,9 @@ def evaluate_transition_result(
     elif result.status is TransitionStatus.BLOCKED:
         decision = EvaluationDecision.BLOCKED
         reason = ("transition blocked",)
+    elif result.status is TransitionStatus.FAILED:
+        decision = EvaluationDecision.REPLAN
+        reason = ("current transition cannot produce the required progress",)
     elif (
         result.status is TransitionStatus.UNDETERMINED
         or result.contradictions
@@ -195,9 +199,9 @@ def evaluate_transition_result(
     elif destination_may_be_complete:
         decision = EvaluationDecision.VALIDATE
         reason = ("transition may satisfy destination predicates",)
-    elif replan_required or result.status is TransitionStatus.FAILED:
+    elif replan_required:
         decision = EvaluationDecision.REPLAN
-        reason = ("current transition cannot produce the required progress",)
+        reason = ("current transition requires replanning",)
     else:
         decision = EvaluationDecision.CONTINUE
         reason = ("semantic progress remains possible",)
