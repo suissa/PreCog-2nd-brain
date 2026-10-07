@@ -25,7 +25,7 @@ class InMemoryStore:
     def experiences(self, trajectory_id: str | None = None) -> tuple[Experience, ...]:
         values = self._experiences.values()
         if trajectory_id is not None:
-            values = (e for e in values if e.trajectory_id == trajectory_id)
+            return tuple(sorted((e for e in values if e.trajectory_id == trajectory_id), key=lambda e: (e.occurred_at, e.id)))
         return tuple(sorted(values, key=lambda e: (e.occurred_at, e.id)))
 
     def upsert_trajectory(self, trajectory: Trajectory) -> None:
@@ -42,10 +42,9 @@ class InMemoryStore:
         self._memories[memory.id] = memory
 
     def memories(self, include_archived: bool = False) -> tuple[Memory, ...]:
-        values = self._memories.values()
-        if not include_archived:
-            values = (m for m in values if m.lifecycle != MemoryLifecycle.ARCHIVED)
-        return tuple(values)
+        if include_archived:
+            return tuple(self._memories.values())
+        return tuple(m for m in self._memories.values() if m.lifecycle != MemoryLifecycle.ARCHIVED)
 
     def put_knowledge(self, knowledge: Knowledge) -> None:
         if any(not self._exists(i) for i in knowledge.evidence_ids):
