@@ -19,3 +19,4 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest
       - run: mypy src
+      - run: python scripts/validate_traceability.py
