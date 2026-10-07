@@ -15,13 +15,14 @@ from .domain import (
     Intent,
     NormalizedIntent,
     OutcomeStatus,
+    TerminalOutcome,
+    Trajectory,
     TerminalStatus,
     TrajectoryStatus,
     Transition,
     TransitionEvaluation,
     TransitionResult,
     TransitionStatus,
-    Trajectory,
     UnderstoodIntent,
     Provenance,
     SemanticState,
@@ -193,12 +194,15 @@ def evaluate_transition_result(
     ):
         decision = EvaluationDecision.UNDETERMINED
         reason = ("critical evidence or state is unresolved",)
+    elif result.status is TransitionStatus.FAILED:
+        decision = EvaluationDecision.REPLAN
+        reason = ("current transition cannot produce the required progress",)
     elif destination_may_be_complete:
         decision = EvaluationDecision.VALIDATE
         reason = ("transition may satisfy destination predicates",)
-    elif replan_required or result.status is TransitionStatus.FAILED:
+    elif replan_required:
         decision = EvaluationDecision.REPLAN
-        reason = ("current transition cannot produce the required progress",)
+        reason = ("current transition requires replanning",)
     else:
         decision = EvaluationDecision.CONTINUE
         reason = ("semantic progress remains possible",)
@@ -364,6 +368,9 @@ def validate_destination(
             outcome = TerminalStatus.NOT_REACHED
     else:
         outcome = TerminalStatus.REACHED
+    if outcome is TerminalStatus.REACHED and not evidence:
+        raise ValueError("Reached requires validation evidence")
+
     return DestinationValidation(
         destination.id,
         required_outcome_satisfied,
@@ -449,4 +456,65 @@ def execute_transition(
         newly_satisfied_conditions=satisfied,
         unresolved_conditions=unresolved,
         contradictions=contradictions,
+    )
+
+
+def reconstruct_state(
+    previous_state: SemanticState,
+    transition: Transition,
+    evidence: tuple[Evidence, ...],
+) -> SemanticState:
+    """Rebuild the semantic state from a predecessor and immutable Evidence."""
+    if transition.from_state_id != previous_state.id:
+        raise ValueError("transition origin does not match previous semantic state")
+    if not evidence:
+        raise ValueError("state reconstruction requires evidence")
+
+    transition_evidence = tuple(
+        item for item in evidence if item.source_transition_id == transition.id
+    )
+    if not transition_evidence:
+        raise ValueError("evidence does not belong to transition")
+
+    observed = tuple(
+        dict.fromkeys(
+            item.observed_fact
+            for item in transition_evidence
+            if item.observed_fact
+        )
+    )
+    contradictions = tuple(
+        dict.fromkeys(
+            previous_state.contradictions
+            + tuple(
+                fact
+                for item in transition_evidence
+                for fact in item.contradicts
+            )
+        )
+    )
+    satisfied = tuple(
+        fact for fact in transition.expected_change
+        if fact in observed and fact not in contradictions
+    )
+
+    return SemanticState(
+        id=f"state:{transition.id}",
+        facts=tuple(dict.fromkeys(previous_state.facts + observed)),
+        conditions=tuple(
+            (
+                fact,
+                ConditionStatus.TRUE
+                if fact in satisfied
+                else ConditionStatus.UNKNOWN,
+            )
+            for fact in transition.expected_change
+        ),
+        provenance=previous_state.provenance
+        + tuple(item.provenance for item in transition_evidence),
+        predecessor_state_id=previous_state.id,
+        contradictions=contradictions,
+        temporal_position=max(
+            item.temporal_position for item in transition_evidence
+        ),
     )

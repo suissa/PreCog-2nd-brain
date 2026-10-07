@@ -387,6 +387,10 @@ class DestinationValidation:
             raise ValueError("Blocked requires an unsatisfied constraint")
         if self.outcome == TerminalStatus.INVALIDATED and not self.failure_conditions_triggered:
             raise ValueError("Invalidated requires a triggered failure condition")
+        if self.outcome == TerminalStatus.UNDETERMINED and not (
+            self.unresolved_contradictions or not self.required_evidence_satisfied
+        ):
+            raise ValueError("Undetermined requires unresolved evidence or contradiction")
 
 
 @dataclass(frozen=True, slots=True)

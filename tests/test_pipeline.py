@@ -8,7 +8,6 @@ from intent_trajectory.domain import (
     Constraint,
     EvaluationDecision,
     Intent,
-    Evidence,
     Provenance,
     SemanticState,
     TerminalStatus,
@@ -107,7 +106,10 @@ def test_destination_reached() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
-        evidence=(Evidence("validation", "t1", "appointment booked", NOW, intent().provenance, supports=("appointment booked",)),),
+        evidence=(__import__("intent_trajectory.domain", fromlist=["Evidence"]).Evidence(
+            "validation-evidence", "t1", "appointment booked", NOW,
+            intent().provenance, supports=("appointment booked",),
+        ),),
     )
     assert v.outcome is TerminalStatus.REACHED
 
@@ -222,12 +224,17 @@ def test_evaluate_transition_result_continues_progress() -> None:
 
 def test_evaluate_transition_result_replans_failed_transition() -> None:
     p = Provenance("source-4", "test", NOW, "unit")
-    result = execute_transition(
-        make_transition(),
-        make_state(),
-        observed_facts=(),
-        provenance=p,
-        temporal_position=NOW,
+    from intent_trajectory.domain import TransitionResult
+
+    state = make_state()
+    result = TransitionResult(
+        transition_id="t1",
+        previous_state=state,
+        resulting_state=SemanticState(
+            "state:t1", state.facts, (), state.provenance, state.id
+        ),
+        evidence=(),
+        status=TransitionStatus.FAILED,
     )
     evaluation = evaluate_transition_result(result)
     assert result.status is TransitionStatus.FAILED
@@ -356,7 +363,7 @@ def test_terminalize_requires_destination_validation_and_evidence() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
-        evidence=(Evidence("validation", "t1", "appointment booked", NOW, intent().provenance, supports=("appointment booked",)),),
+        evidence=(Evidence("validation-e1", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",)),),
     )
     evidence = Evidence("e1", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
     terminal = terminalize(
@@ -388,7 +395,7 @@ def test_terminalize_rejects_already_terminal_trajectory() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
-        evidence=(Evidence("validation", "t1", "appointment booked", NOW, intent().provenance, supports=("appointment booked",)),),
+        evidence=(Evidence("validation-e2", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",)),),
     )
     evidence = Evidence("e2", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
     with pytest.raises(ValueError, match="already terminal"):
@@ -411,7 +418,7 @@ def test_apply_terminal_outcome_closes_trajectory_once() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
-        evidence=(Evidence("validation", "t1", "appointment booked", NOW, intent().provenance, supports=("appointment booked",)),),
+        evidence=(Evidence("validation-e3", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",)),),
     )
     evidence = Evidence("e3", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
     terminal = terminalize(
@@ -425,3 +432,175 @@ def test_apply_terminal_outcome_closes_trajectory_once() -> None:
     assert closed.evidence_ids == ("e3",)
     with pytest.raises(ValueError, match="already terminal"):
         apply_terminal_outcome(closed, terminal)
+
+
+def test_reconstruct_state_from_evidence_is_deterministic() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import reconstruct_state
+
+    p = Provenance("source-reconstruct", "test", NOW, "unit")
+    state = make_state()
+    transition = make_transition("t-reconstruct")
+    evidence = (
+        Evidence(
+            "e1",
+            transition.id,
+            "appointment booked",
+            NOW,
+            p,
+            supports=("appointment booked",),
+        ),
+    )
+    first = reconstruct_state(state, transition, evidence)
+    second = reconstruct_state(state, transition, evidence)
+    assert first == second
+    assert first.predecessor_state_id == state.id
+    assert first.conditions == (("appointment booked", ConditionStatus.TRUE),)
+
+
+def test_reconstruct_state_preserves_contradiction_and_unknown() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import reconstruct_state
+
+    p = Provenance("source-reconstruct-contradiction", "test", NOW, "unit")
+    state = make_state()
+    transition = make_transition("t-reconstruct-contradiction")
+    evidence = (
+        Evidence(
+            "e1",
+            transition.id,
+            "appointment booked",
+            NOW,
+            p,
+            contradicts=("appointment booked",),
+        ),
+    )
+    rebuilt = reconstruct_state(state, transition, evidence)
+    assert rebuilt.conditions == (("appointment booked", ConditionStatus.UNKNOWN),)
+    assert rebuilt.contradictions == ("appointment booked",)
+
+
+def test_reconstruct_state_rejects_missing_evidence() -> None:
+    from intent_trajectory.pipeline import reconstruct_state
+
+    with pytest.raises(ValueError, match="requires evidence"):
+        reconstruct_state(make_state(), make_transition("t-empty"), ())
+
+
+def test_reconstruct_state_rejects_unrelated_evidence() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import reconstruct_state
+
+    p = Provenance("source-reconstruct-unrelated", "test", NOW, "unit")
+    evidence = (
+        Evidence("e1", "other-transition", "unrelated", NOW, p),
+    )
+    with pytest.raises(ValueError, match="does not belong"):
+        reconstruct_state(make_state(), make_transition("t-reconstruct"), evidence)
+
+
+def test_evaluate_transition_result_prioritizes_undetermined_over_replan() -> None:
+    from intent_trajectory.domain import TransitionResult
+
+    state = make_state()
+    result = TransitionResult(
+        transition_id="t-undetermined-failure",
+        previous_state=state,
+        resulting_state=SemanticState(
+            "state:t-undetermined-failure",
+            state.facts,
+            (("appointment booked", ConditionStatus.UNKNOWN),),
+            state.provenance,
+            state.id,
+        ),
+        evidence=(),
+        status=TransitionStatus.FAILED,
+        unresolved_conditions=("appointment booked",),
+    )
+    evaluation = evaluate_transition_result(
+        result,
+        destination_may_be_complete=True,
+        replan_required=True,
+    )
+    assert evaluation.decision is EvaluationDecision.UNDETERMINED
+
+
+def test_destination_validation_all_terminal_statuses() -> None:
+    _, _, _, destination, _ = make_destination()
+    evidence = ()
+    assert validate_destination(
+        destination, required_outcome_satisfied=False, final_state_satisfied=False,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=False,
+    ).outcome is TerminalStatus.NOT_REACHED
+
+    blocked = validate_destination(
+        destination, required_outcome_satisfied=False, final_state_satisfied=False,
+        required_evidence_satisfied=True, constraints_satisfied=False,
+        completion_conditions_satisfied=False,
+    )
+    assert blocked.outcome is TerminalStatus.BLOCKED
+
+    invalidated = validate_destination(
+        destination, required_outcome_satisfied=False, final_state_satisfied=False,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=False, failure_conditions_triggered=True,
+    )
+    assert invalidated.outcome is TerminalStatus.INVALIDATED
+
+    undetermined = validate_destination(
+        destination, required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=False, constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+    )
+    assert undetermined.outcome is TerminalStatus.UNDETERMINED
+
+
+def test_reached_requires_validation_evidence() -> None:
+    _, _, _, destination, _ = make_destination()
+    with pytest.raises(ValueError, match="validation evidence"):
+        validate_destination(
+            destination, required_outcome_satisfied=True, final_state_satisfied=True,
+            required_evidence_satisfied=True, constraints_satisfied=True,
+            completion_conditions_satisfied=True, evidence=(),
+        )
+
+
+def test_action_success_alone_cannot_reach_destination() -> None:
+    _, _, _, destination, _ = make_destination()
+    validation = validate_destination(
+        destination, required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=False, constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+        evidence=(),
+    )
+    assert validation.outcome is TerminalStatus.UNDETERMINED
+
+
+def test_terminalize_rejects_validation_for_other_destination() -> None:
+    from intent_trajectory.pipeline import terminalize
+    trajectory, i, _, _, destination = make_trajectory()
+    other = DestinationContract(
+        "destination:other", destination.goal_id, destination.required_outcome,
+        destination.required_final_state, destination.required_evidence,
+        destination.constraints, destination.completion_conditions,
+        destination.failure_conditions, destination.validation_rules,
+    )
+    validation = validate_destination(
+        other, required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+        evidence=(
+            __import__("intent_trajectory.domain", fromlist=["Evidence"]).Evidence(
+                "terminal-other", "t1", "appointment booked", NOW, i.provenance,
+                supports=("appointment booked",),
+            ),
+        ),
+    )
+    with pytest.raises(ValueError, match="trajectory Destination"):
+        terminalize(
+            trajectory, validation,
+            evidence=validation.evidence, satisfied_conditions=("appointment booked",),
+            unsatisfied_conditions=(), constraint_status="satisfied",
+            reason=("wrong destination",), provenance=i.provenance,
+        )
