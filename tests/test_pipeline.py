@@ -1,10 +1,76 @@
 from datetime import datetime, timezone
-from intent_trajectory.domain import Intent, Provenance, EvaluationDecision, TerminalStatus
-from intent_trajectory.pipeline import understand, normalize, contextualize, define_goal, define_constraints, define_destination, evaluate_transition, validate_destination
+
+import pytest
+
+from intent_trajectory.domain import (
+    CandidateTrajectory,
+    ConditionStatus,
+    Constraint,
+    EvaluationDecision,
+    Intent,
+    Provenance,
+    SemanticState,
+    TerminalStatus,
+    TrajectoryStatus,
+    Transition,
+    TransitionStatus,
+)
+from intent_trajectory.pipeline import (
+    contextualize,
+    define_constraints,
+    define_destination,
+    define_goal,
+    evaluate_transition,
+    evaluate_transition_result,
+    execute_transition,
+    normalize,
+    replan,
+    understand,
+    validate_destination,
+)
 
 NOW = datetime.now(timezone.utc)
+
+
 def intent() -> Intent:
-    return Intent("i1", "book appointment", Provenance("i1","test",NOW,"unit"), NOW, requested_outcome="appointment booked")
+    return Intent(
+        "i1",
+        "book appointment",
+        Provenance("i1", "test", NOW, "unit"),
+        NOW,
+        requested_outcome="appointment booked",
+    )
+
+
+def make_transition(
+    transition_id: str = "t1",
+    state_id: str = "s0",
+) -> Transition:
+    return Transition(
+        transition_id,
+        state_id,
+        "book appointment",
+        ("customer known",),
+        (),
+        ("appointment booked",),
+        ("appointment booked",),
+    )
+
+
+def make_state(state_id: str = "s0") -> SemanticState:
+    return SemanticState(state_id, ("customer known",), (), (Provenance("state", "test", NOW, "unit"),))
+
+
+def make_destination() -> tuple[Intent, object, object, object, tuple[Constraint, ...]]:
+    i = intent()
+    u = understand(i)
+    n = normalize(u)
+    c = contextualize(n, ())
+    g = define_goal(c, i)
+    constraints = define_constraints(i)
+    d = define_destination(g, constraints)
+    return i, g, constraints, d, constraints
+
 
 def test_semantic_pipeline() -> None:
     i = intent()
@@ -16,40 +82,192 @@ def test_semantic_pipeline() -> None:
     d = define_destination(g, cs)
     assert d.goal_id == g.id
 
+
 def test_evaluation_precedence() -> None:
-    e = evaluate_transition(invalidated=True, blocked=True, undetermined=True, should_validate=True, should_replan=True)
+    e = evaluate_transition(
+        invalidated=True,
+        blocked=True,
+        undetermined=True,
+        should_validate=True,
+        should_replan=True,
+    )
     assert e.decision is EvaluationDecision.INVALIDATED
 
+
 def test_destination_reached() -> None:
-    d = define_destination(define_goal(contextualize(normalize(understand(intent())), ()), intent()), ())
-    v = validate_destination(d, required_outcome_satisfied=True, final_state_satisfied=True,
-                             required_evidence_satisfied=True, constraints_satisfied=True,
-                             completion_conditions_satisfied=True)
+    d = define_destination(
+        define_goal(contextualize(normalize(understand(intent())), ()), intent()),
+        (),
+    )
+    v = validate_destination(
+        d,
+        required_outcome_satisfied=True,
+        final_state_satisfied=True,
+        required_evidence_satisfied=True,
+        constraints_satisfied=True,
+        completion_conditions_satisfied=True,
+    )
     assert v.outcome is TerminalStatus.REACHED
 
+
 def test_execute_transition_reconstructs_semantic_state_and_evidence() -> None:
-    from intent_trajectory.domain import Provenance, SemanticState, Transition, TransitionStatus, ConditionStatus
-    from intent_trajectory.pipeline import execute_transition
     p = Provenance("source-1", "test", NOW, "unit")
     state = SemanticState("s0", ("customer known",), (), (p,))
-    t = Transition("t1", "s0", "book appointment", ("customer known",),
-                   (), ("appointment booked",), ("appointment booked",))
-    result = execute_transition(t, state, observed_facts=("appointment booked",), provenance=p, temporal_position=NOW)
+    t = make_transition()
+    result = execute_transition(
+        t,
+        state,
+        observed_facts=("appointment booked",),
+        provenance=p,
+        temporal_position=NOW,
+    )
     assert result.status is TransitionStatus.SUCCEEDED
     assert result.resulting_state.predecessor_state_id == "s0"
     assert result.resulting_state.conditions == (("appointment booked", ConditionStatus.TRUE),)
     assert len(result.evidence) == 1
 
+
 def test_execute_transition_preserves_unknown_and_contradiction() -> None:
-    from intent_trajectory.domain import Provenance, SemanticState, Transition, TransitionStatus, ConditionStatus
-    from intent_trajectory.pipeline import execute_transition
     p = Provenance("source-2", "test", NOW, "unit")
     state = SemanticState("s0", (), (), (p,))
-    t = Transition("t2", "s0", "book appointment", ("customer known",),
-                   (), ("appointment booked",), ("appointment booked",))
-    result = execute_transition(t, state, observed_facts=(), provenance=p,
-                                temporal_position=NOW, contradicted_facts=("appointment booked",))
+    t = make_transition()
+    result = execute_transition(
+        t,
+        state,
+        observed_facts=(),
+        provenance=p,
+        temporal_position=NOW,
+        contradicted_facts=("appointment booked",),
+    )
     assert result.status is TransitionStatus.UNDETERMINED
     assert result.unresolved_conditions == ()
     assert result.resulting_state.conditions == (("appointment booked", ConditionStatus.UNKNOWN),)
     assert result.resulting_state.contradictions == ("appointment booked",)
+
+
+def test_evaluate_transition_result_preserves_precedence() -> None:
+    p = Provenance("source-3", "test", NOW, "unit")
+    result = execute_transition(
+        make_transition(),
+        make_state(),
+        observed_facts=(),
+        provenance=p,
+        temporal_position=NOW,
+        contradicted_facts=("appointment booked",),
+    )
+    evaluation = evaluate_transition_result(
+        result,
+        constraint_violations=("constraint:c1",),
+        destination_may_be_complete=True,
+        replan_required=True,
+    )
+    assert evaluation.transition_id == "t1"
+    assert evaluation.decision is EvaluationDecision.INVALIDATED
+    assert evaluation.next_state_id == result.resulting_state.id
+
+
+def test_evaluate_transition_result_replans_failed_transition() -> None:
+    p = Provenance("source-4", "test", NOW, "unit")
+    result = execute_transition(
+        make_transition(),
+        make_state(),
+        observed_facts=(),
+        provenance=p,
+        temporal_position=NOW,
+    )
+    evaluation = evaluate_transition_result(result)
+    assert result.status is TransitionStatus.FAILED
+    assert evaluation.decision is EvaluationDecision.REPLAN
+
+
+def test_evaluate_transition_result_validates_possible_completion() -> None:
+    p = Provenance("source-5", "test", NOW, "unit")
+    result = execute_transition(
+        make_transition(),
+        make_state(),
+        observed_facts=("appointment booked",),
+        provenance=p,
+        temporal_position=NOW,
+    )
+    evaluation = evaluate_transition_result(result, destination_may_be_complete=True)
+    assert evaluation.decision is EvaluationDecision.VALIDATE
+
+
+def test_replan_preserves_semantic_identity() -> None:
+    i, g, constraints, d, _ = make_destination()
+    state = make_state()
+    replacement = make_transition("t2")
+    candidate = replan(
+        intent=i,
+        goal=g,
+        constraints=constraints,
+        destination=d,
+        current_state=state,
+        transitions=(replacement,),
+        reason="original transition failed",
+    )
+    assert isinstance(candidate, CandidateTrajectory)
+    assert candidate.destination_id == d.id
+    assert d.goal_id == g.id
+    assert g.source_intent_id == i.id
+    assert tuple(d.constraints) == constraints
+    assert candidate.origin_state_id == state.id
+
+
+def test_replan_rejects_semantic_mutation() -> None:
+    i, g, constraints, d, _ = make_destination()
+    state = make_state()
+    other = Intent(
+        "i2",
+        "cancel appointment",
+        Provenance("i2", "test", NOW, "unit"),
+        NOW,
+        requested_outcome="appointment cancelled",
+    )
+    with pytest.raises(ValueError, match="original Intent"):
+        replan(
+            intent=other,
+            goal=g,
+            constraints=constraints,
+            destination=d,
+            current_state=state,
+            transitions=(make_transition("t2"),),
+            reason="changed objective",
+        )
+
+    altered_constraints = (
+        Constraint(
+            "constraint:altered",
+            i.id,
+            "not allowed",
+            "trajectory",
+            "required",
+            "always",
+            "trajectory invalidated",
+        ),
+    )
+    with pytest.raises(ValueError, match="active Constraints"):
+        replan(
+            intent=i,
+            goal=g,
+            constraints=altered_constraints,
+            destination=d,
+            current_state=state,
+            transitions=(make_transition("t2"),),
+            reason="changed constraints",
+        )
+
+
+def test_replan_rejects_terminal_trajectory() -> None:
+    i, g, constraints, d, _ = make_destination()
+    with pytest.raises(ValueError, match="terminal trajectory"):
+        replan(
+            intent=i,
+            goal=g,
+            constraints=constraints,
+            destination=d,
+            current_state=make_state(),
+            transitions=(make_transition("t2"),),
+            reason="attempted post-terminal action",
+            trajectory_status=TrajectoryStatus.REACHED,
+        )
