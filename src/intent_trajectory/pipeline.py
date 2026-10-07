@@ -258,6 +258,76 @@ def replan(
     )
 
 
+def terminalize(
+    trajectory: Trajectory,
+    validation: DestinationValidation,
+    *,
+    evidence: tuple[Evidence, ...],
+    satisfied_conditions: tuple[str, ...],
+    unsatisfied_conditions: tuple[str, ...],
+    constraint_status: str,
+    reason: tuple[str, ...],
+    provenance: Provenance,
+) -> TerminalOutcome:
+    """Materialize a terminal outcome only from an explicit DestinationValidation."""
+    if validation.destination_id != trajectory.destination_id:
+        raise ValueError("validation does not belong to trajectory Destination")
+    if not reason:
+        raise ValueError("terminalization requires an explicit reason")
+    if not evidence:
+        raise ValueError("terminalization requires evidence")
+    if trajectory.status is not TrajectoryStatus.ACTIVE:
+        raise ValueError("trajectory is already terminal")
+    if validation.outcome is TerminalStatus.REACHED and (
+        not validation.required_outcome_satisfied
+        or not validation.final_state_satisfied
+        or not validation.required_evidence_satisfied
+        or not validation.constraints_satisfied
+        or not validation.completion_conditions_satisfied
+        or validation.failure_conditions_triggered
+        or validation.unresolved_contradictions
+    ):
+        raise ValueError("Reached cannot be terminalized without every completion predicate")
+    return TerminalOutcome(
+        trajectory_id=trajectory.id,
+        destination_id=trajectory.destination_id,
+        status=validation.outcome,
+        final_state_id=trajectory.current_state_id,
+        evidence_ids=tuple(e.id for e in evidence),
+        satisfied_conditions=satisfied_conditions,
+        unsatisfied_conditions=unsatisfied_conditions,
+        constraint_status=constraint_status,
+        reason=reason,
+        provenance=provenance,
+    )
+
+
+def apply_terminal_outcome(
+    trajectory: Trajectory,
+    terminal: TerminalOutcome,
+) -> Trajectory:
+    """Close an active trajectory exactly once using its validated terminal outcome."""
+    if trajectory.status is not TrajectoryStatus.ACTIVE:
+        raise ValueError("trajectory is already terminal")
+    if terminal.trajectory_id != trajectory.id:
+        raise ValueError("terminal outcome does not belong to trajectory")
+    if terminal.destination_id != trajectory.destination_id:
+        raise ValueError("terminal outcome does not belong to trajectory Destination")
+    return Trajectory(
+        id=trajectory.id,
+        intent_id=trajectory.intent_id,
+        goal_id=trajectory.goal_id,
+        destination_id=trajectory.destination_id,
+        current_state_id=trajectory.current_state_id,
+        plan_ids=trajectory.plan_ids,
+        transition_ids=trajectory.transition_ids,
+        evidence_ids=tuple(dict.fromkeys(trajectory.evidence_ids + terminal.evidence_ids)),
+        status=TrajectoryStatus(terminal.status.value),
+        version=trajectory.version + 1,
+        provenance=terminal.provenance,
+    )
+
+
 def validate_destination(
     destination: DestinationContract,
     *,
