@@ -166,6 +166,58 @@ def test_evaluate_transition_result_preserves_precedence() -> None:
     assert evaluation.next_state_id == result.resulting_state.id
 
 
+def test_evaluate_transition_result_blocks_blocked_transition() -> None:
+    state = make_state()
+    t = make_transition()
+    from intent_trajectory.domain import TransitionResult
+    blocked = TransitionResult(
+        transition_id=t.id,
+        previous_state=state,
+        resulting_state=SemanticState("state:t1", state.facts, (), state.provenance, state.id),
+        evidence=(),
+        status=TransitionStatus.BLOCKED,
+        unresolved_conditions=("appointment booked",),
+    )
+    evaluation = evaluate_transition_result(blocked)
+    assert evaluation.decision is EvaluationDecision.BLOCKED
+
+
+def test_evaluate_transition_result_marks_undetermined() -> None:
+    p = Provenance("source-undetermined", "test", NOW, "unit")
+    result = execute_transition(
+        make_transition(),
+        make_state(),
+        observed_facts=(),
+        provenance=p,
+        temporal_position=NOW,
+        contradicted_facts=("appointment booked",),
+    )
+    evaluation = evaluate_transition_result(result)
+    assert evaluation.decision is EvaluationDecision.UNDETERMINED
+
+
+def test_evaluate_transition_result_continues_progress() -> None:
+    p = Provenance("source-progress", "test", NOW, "unit")
+    t = Transition(
+        "t-progress",
+        "s0",
+        "observe appointment availability",
+        ("customer known",),
+        (),
+        ("availability checked",),
+        ("availability checked",),
+    )
+    result = execute_transition(
+        t,
+        make_state(),
+        observed_facts=("availability checked",),
+        provenance=p,
+        temporal_position=NOW,
+    )
+    evaluation = evaluate_transition_result(result)
+    assert evaluation.decision is EvaluationDecision.CONTINUE
+
+
 def test_evaluate_transition_result_replans_failed_transition() -> None:
     p = Provenance("source-4", "test", NOW, "unit")
     result = execute_transition(
