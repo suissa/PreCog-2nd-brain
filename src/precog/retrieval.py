@@ -4,12 +4,12 @@ import math
 import re
 from collections import Counter
 from datetime import datetime
-from typing import Sequence
+from typing import Any, Sequence
 
 from .models import Memory, MemoryLifecycle, RetrievalEvidence
 from .store import InMemoryStore
 
-_TOKEN = re.compile(r"[\\w-]+", re.UNICODE)
+_TOKEN = re.compile(r"[\w-]+", re.UNICODE)
 
 
 def _tokens(text: str) -> Counter[str]:
@@ -32,6 +32,54 @@ def _lexical(query: str, content: str) -> float:
         return 0.0
     overlap = sum(min(q[t], d[t]) for t in q)
     return min(1.0, overlap / max(1, sum(q.values())))
+
+
+def _phrase_match(query: str, content: str) -> bool:
+    return query.strip().casefold() in content.casefold()
+
+
+class LexicalRetriever:
+    """Deterministic lexical retrieval over canonical Memory projections."""
+
+    def __init__(self, store: InMemoryStore) -> None:
+        self.store = store
+
+    def search(
+        self,
+        query: str,
+        *,
+        at: datetime | None = None,
+        tenant_id: str | None = None,
+        actor: str | None = None,
+        lifecycle: set[MemoryLifecycle] | None = None,
+        limit: int = 10,
+    ) -> tuple[RetrievalEvidence, ...]:
+        if not query.strip() or limit <= 0:
+            return ()
+        now = at
+        results: list[RetrievalEvidence] = []
+        for memory in self.store.memories():
+            if lifecycle is not None and memory.lifecycle not in lifecycle:
+                continue
+            metadata: dict[str, Any] = dict(memory.metadata)
+            if tenant_id is not None and metadata.get("tenant_id") != tenant_id:
+                continue
+            if actor is not None and metadata.get("actor") != actor:
+                continue
+            if now is not None and not memory.is_valid_at(now):
+                continue
+            lexical = _lexical(query, " ".join((memory.id, memory.content, *memory.source_ids)))
+            if _phrase_match(query, memory.content):
+                lexical = 1.0
+            if lexical <= 0:
+                continue
+            temporal = 1.0 if now is not None else 0.5
+            results.append(RetrievalEvidence(
+                memory.id, lexical, lexical, 0.0, temporal, 0.0,
+                memory.provenance, memory.lifecycle, "memory",
+            ))
+        results.sort(key=lambda item: (-item.score, item.object_id))
+        return tuple(results[:limit])
 
 
 class HybridRetriever:
@@ -75,7 +123,7 @@ class HybridRetriever:
     def _temporal(memory: Memory, now: datetime) -> float:
         if memory.valid_from and now < memory.valid_from:
             return 0.0
-        if memory.valid_to and now > memory.valid_to:
+        if memory.valid_to and now >= memory.valid_to:
             return 0.0
         if not memory.valid_from and not memory.valid_to:
             return 0.5
