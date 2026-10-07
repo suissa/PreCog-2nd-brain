@@ -21,6 +21,7 @@ from .domain import (
     TransitionEvaluation,
     TransitionResult,
     TransitionStatus,
+    Trajectory,
     UnderstoodIntent,
     Provenance,
     SemanticState,
