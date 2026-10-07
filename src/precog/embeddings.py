@@ -112,7 +112,7 @@ class DeterministicEmbeddingProvider:
         return self._dimensions
 
     def embed(self, text: str) -> Sequence[float]:
-        digest = sha256(text.encode("utf-8")).digest()
+        digest = sha256((self._model + "\x1f" + text).encode("utf-8")).digest()
         values = []
         for index in range(self._dimensions):
             values.append((digest[index % len(digest)] / 255.0) * 2.0 - 1.0)
