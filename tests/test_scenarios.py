@@ -95,7 +95,10 @@ def test_reached_requires_all_predicates_and_evidence() -> None:
     p = Provenance("p", "test", NOW, "unit")
     evidence = Evidence("e", "t", "complete", NOW, p, supports=("complete",))
     validation = validate_destination(
-        _destination(), True, True, True, True, True, evidence=(evidence,)
+        _destination(),
+        required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=True, evidence=(evidence,)
     )
     assert validation.outcome is TerminalStatus.REACHED
 
@@ -143,7 +146,10 @@ def test_action_success_is_not_destination_success() -> None:
 def test_contradiction_blocks_reached() -> None:
     p = Provenance("p", "test", NOW, "unit")
     validation = validate_destination(
-        _destination(), True, True, True, True, True,
+        _destination(),
+        required_outcome_satisfied=True, final_state_satisfied=True,
+        required_evidence_satisfied=True, constraints_satisfied=True,
+        completion_conditions_satisfied=True,
         unresolved_contradictions=("complete",),
         evidence=(Evidence("e", "t", "complete", NOW, p),),
     )
