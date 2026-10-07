@@ -1,9 +1,10 @@
 from __future__ import annotations
-from dataclasses import replace
+from datetime import datetime, timezone
 from .domain import (
     Constraint, ContextOutcome, ContextualizedIntent, DestinationContract, DestinationValidation,
     Evidence, EvaluationDecision, Goal, Intent, NormalizedIntent, OutcomeStatus, TerminalStatus,
-    TransitionEvaluation, UnderstoodIntent,
+    Transition, TransitionEvaluation, TransitionResult, TransitionStatus, UnderstoodIntent,
+    Provenance, SemanticState, ConditionStatus,
 )
 
 def understand(intent: Intent) -> UnderstoodIntent:
@@ -107,3 +108,61 @@ def validate_destination(
                                  required_evidence_satisfied, constraints_satisfied,
                                  completion_conditions_satisfied, failure_conditions_triggered,
                                  unresolved_contradictions, tuple(evidence), outcome)
+
+def execute_transition(
+    transition: Transition,
+    previous_state: SemanticState,
+    *,
+    observed_facts: tuple[str, ...],
+    provenance: Provenance,
+    temporal_position: datetime | None = None,
+    contradicted_facts: tuple[str, ...] = (),
+) -> TransitionResult:
+    """Apply semantic evidence to one transition without declaring destination success."""
+    if transition.from_state_id != previous_state.id:
+        raise ValueError("transition origin does not match previous semantic state")
+    observed = tuple(dict.fromkeys(observed_facts))
+    contradictions = tuple(dict.fromkeys(contradicted_facts))
+    satisfied = tuple(fact for fact in transition.expected_change if fact in observed)
+    unresolved = tuple(fact for fact in transition.expected_change if fact not in observed and fact not in contradictions)
+    when = temporal_position or datetime.now(timezone.utc)
+    evidence = tuple(
+        Evidence(
+            id=f"evidence:{transition.id}:{index}",
+            source_transition_id=transition.id,
+            observed_fact=fact,
+            temporal_position=when,
+            provenance=provenance,
+            supports=(fact,) if fact in transition.expected_change else (),
+            contradicts=(fact,) if fact in contradictions else (),
+        )
+        for index, fact in enumerate(observed + contradictions)
+    )
+    if contradictions:
+        status = TransitionStatus.UNDETERMINED if not satisfied else TransitionStatus.PARTIALLY_SUCCEEDED
+    elif len(satisfied) == len(transition.expected_change):
+        status = TransitionStatus.SUCCEEDED
+    elif satisfied:
+        status = TransitionStatus.PARTIALLY_SUCCEEDED
+    else:
+        status = TransitionStatus.FAILED
+    resulting = SemanticState(
+        id=f"state:{transition.id}",
+        facts=tuple(dict.fromkeys(previous_state.facts + observed)),
+        conditions=tuple((fact, ConditionStatus.TRUE if fact in satisfied else ConditionStatus.UNKNOWN)
+                         for fact in transition.expected_change),
+        provenance=previous_state.provenance + (provenance,),
+        predecessor_state_id=previous_state.id,
+        contradictions=tuple(dict.fromkeys(previous_state.contradictions + contradictions)),
+        temporal_position=when,
+    )
+    return TransitionResult(
+        transition_id=transition.id,
+        previous_state=previous_state,
+        resulting_state=resulting,
+        evidence=evidence,
+        status=status,
+        newly_satisfied_conditions=satisfied,
+        unresolved_conditions=unresolved,
+        contradictions=contradictions,
+    )
