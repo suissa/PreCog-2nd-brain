@@ -187,6 +187,84 @@ class PostgresStore:
             "source_type": "memory",
         } for row in rows)
 
+    def put_embedding(self, embedding: "EmbeddingRecord") -> None:
+        """Persist only a derived vector projection; canonical memory is untouched."""
+        from .embeddings import EmbeddingRecord
+        if not isinstance(embedding, EmbeddingRecord):
+            raise TypeError("embedding must be an EmbeddingRecord")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO memory_embedding
+                    (memory_id, model, provider_version, dimensions, source_version,
+                     source_hash, embedding)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s::vector)
+                    ON CONFLICT (memory_id) DO UPDATE SET
+                    model=EXCLUDED.model, provider_version=EXCLUDED.provider_version,
+                    dimensions=EXCLUDED.dimensions, source_version=EXCLUDED.source_version,
+                    source_hash=EXCLUDED.source_hash, embedding=EXCLUDED.embedding""",
+                (embedding.memory_id, embedding.model, embedding.provider_version,
+                 embedding.dimensions, embedding.source_version, embedding.source_hash,
+                 "[" + ",".join(str(v) for v in embedding.vector) + "]"),
+            )
+        self._connection.commit()
+
+    def embedding(self, memory_id: str) -> "EmbeddingRecord | None":
+        from .embeddings import EmbeddingRecord
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT memory_id, embedding, model, provider_version, dimensions,
+                    source_version, source_hash
+                    FROM memory_embedding WHERE memory_id = %s""",
+                (memory_id,),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        vector = tuple(float(v) for v in row[1])
+        return EmbeddingRecord(
+            row[0], vector, row[2], row[3], row[4], row[5], row[6],
+        )
+
+    def semantic_search(
+        self,
+        query_vector: Sequence[float],
+        *,
+        model: str,
+        provider_version: str,
+        dimensions: int,
+        limit: int = 10,
+    ) -> tuple[dict[str, Any], ...]:
+        """Deterministic pgvector cosine retrieval over current derived vectors."""
+        if not query_vector or dimensions < 1 or len(query_vector) != dimensions or limit <= 0:
+            return ()
+        vector = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT e.memory_id, 1 - (e.embedding <=> %s::vector) AS score,
+                    m.provenance, m.lifecycle, e.source_version, m.version
+                    FROM memory_embedding e
+                    JOIN memory m ON m.memory_id = e.memory_id
+                    WHERE m.lifecycle <> %s
+                      AND e.model = %s
+                      AND e.provider_version = %s
+                      AND e.dimensions = %s
+                      AND e.source_version = m.version
+                    ORDER BY score DESC, e.memory_id ASC
+                    LIMIT %s""",
+                (vector, MemoryLifecycle.ARCHIVED.value, model,
+                 provider_version, dimensions, limit),
+            )
+            rows = cursor.fetchall()
+        return tuple({
+            "object_id": row[0],
+            "score": max(0.0, min(1.0, float(row[1]))),
+            "provenance": self._provenance(row[2]),
+            "lifecycle": MemoryLifecycle(row[3]),
+            "source_type": "memory",
+            "source_version": row[4],
+        } for row in rows)
+
+
     def put_knowledge(self, knowledge: Knowledge) -> None:
         self._require_sources(knowledge.evidence_ids)
         with self._connection.cursor() as cursor:
