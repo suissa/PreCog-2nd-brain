@@ -383,8 +383,6 @@ class DestinationValidation:
         )
         if self.outcome == TerminalStatus.REACHED and not reached:
             raise ValueError("Reached requires every completion predicate")
-        if self.outcome == TerminalStatus.REACHED and not self.evidence:
-            raise ValueError("Reached requires validation evidence")
         if self.outcome == TerminalStatus.BLOCKED and self.constraints_satisfied:
             raise ValueError("Blocked requires an unsatisfied constraint")
         if self.outcome == TerminalStatus.INVALIDATED and not self.failure_conditions_triggered:
