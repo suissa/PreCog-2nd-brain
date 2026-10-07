@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
+from datetime import datetime, timezone
 from collections.abc import Sequence
 from typing import Any
 
@@ -17,28 +19,32 @@ class PostgresStore:
         self._connection = connection
 
     def append_experience(self, experience: Experience) -> bool:
-        with self._connection.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO experience (
-                    experience_id, trajectory_id, occurred_at, recorded_at,
-                    actor, event_type, payload, provenance, intent_id,
-                    behavior_id, action, outcome, schema_version
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s)
-                ON CONFLICT (experience_id) DO NOTHING RETURNING experience_id""",
-                (experience.id, experience.trajectory_id, experience.occurred_at,
-                 experience.recorded_at, experience.actor, experience.event_type,
-                 self._json(experience.payload), self._json(experience.provenance),
-                 experience.intent_id, experience.behavior_id, experience.action,
-                 experience.outcome, experience.schema_version),
-            )
-            inserted = cursor.fetchone()
-        if inserted is not None:
-            self._connection.commit()
-            return True
-        existing = self.get_experience(experience.id)
-        if existing != experience:
-            raise ValueError("experience id already exists with different content")
-        return False
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute(
+                    """INSERT INTO experience (
+                        experience_id, trajectory_id, occurred_at, recorded_at,
+                        actor, event_type, payload, provenance, intent_id,
+                        behavior_id, action, outcome, schema_version
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s)
+                    ON CONFLICT (experience_id) DO NOTHING RETURNING experience_id""",
+                    (experience.id, experience.trajectory_id, experience.occurred_at,
+                     self._recorded_at_sql(), experience.actor, experience.event_type,
+                     self._json(experience.payload), self._json(experience.provenance),
+                     experience.intent_id, experience.behavior_id, experience.action,
+                     experience.outcome, experience.schema_version),
+                )
+                inserted = cursor.fetchone()
+            if inserted is not None:
+                self._connection.commit()
+                return True
+            existing = self.get_experience(experience.id)
+            if existing != replace(experience, recorded_at=existing.recorded_at):
+                raise ValueError("experience id already exists with different content")
+            return False
+        except Exception:
+            self._connection.rollback()
+            raise
 
     def get_experience(self, experience_id: str) -> Experience | None:
         with self._connection.cursor() as cursor:
@@ -214,6 +220,10 @@ class PostgresStore:
             found = {r[0] for r in cursor.fetchall()}
         if set(ids) - found:
             raise ValueError("provenance references unknown source")
+
+    @staticmethod
+    def _recorded_at_sql() -> Any:
+        return datetime.now(timezone.utc)
 
     @staticmethod
     def _json(value: Any) -> str:
