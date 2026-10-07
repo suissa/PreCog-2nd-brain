@@ -106,6 +106,10 @@ def test_destination_reached() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
+        evidence=(__import__("intent_trajectory.domain", fromlist=["Evidence"]).Evidence(
+            "validation-evidence", "t1", "appointment booked", NOW,
+            intent().provenance, supports=("appointment booked",),
+        ),),
     )
     assert v.outcome is TerminalStatus.REACHED
 
@@ -359,6 +363,7 @@ def test_terminalize_requires_destination_validation_and_evidence() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
+        evidence=(Evidence("validation-e1", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",)),),
     )
     evidence = Evidence("e1", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
     terminal = terminalize(
@@ -390,6 +395,7 @@ def test_terminalize_rejects_already_terminal_trajectory() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
+        evidence=(Evidence("validation-e2", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",)),),
     )
     evidence = Evidence("e2", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
     with pytest.raises(ValueError, match="already terminal"):
@@ -412,6 +418,7 @@ def test_apply_terminal_outcome_closes_trajectory_once() -> None:
         required_evidence_satisfied=True,
         constraints_satisfied=True,
         completion_conditions_satisfied=True,
+        evidence=(Evidence("validation-e3", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",)),),
     )
     evidence = Evidence("e3", "t1", "appointment booked", NOW, i.provenance, supports=("appointment booked",))
     terminal = terminalize(
