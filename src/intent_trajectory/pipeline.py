@@ -368,7 +368,7 @@ def validate_destination(
             outcome = TerminalStatus.NOT_REACHED
     else:
         outcome = TerminalStatus.REACHED
-    if required_evidence_satisfied and not evidence:
+    if outcome is TerminalStatus.REACHED and not evidence:
         raise ValueError("Reached requires validation evidence")
 
     return DestinationValidation(
