@@ -36,8 +36,8 @@ class Cursor:
 
 
 class Connection:
-    def __init__(self, rows=()):
-        self.cursor_obj = Cursor(rows)
+    def __init__(self, rows=(), fetchone_values=None):
+        self.cursor_obj = Cursor(rows, fetchone_values)
         self.commits = 0
 
     def cursor(self):
@@ -87,7 +87,8 @@ def test_derived_state_persistence_validates_provenance():
 
 
 def test_memory_read_excludes_archived_by_default():
-    active = Memory("m1", MemoryType.SEMANTIC, "a", ("e1",), NOW)
+    provenance = Provenance(("e1",), "x")
+    active = Memory("m1", MemoryType.SEMANTIC, "a", ("e1",), NOW, provenance=provenance)
     archived = Memory("m2", MemoryType.SEMANTIC, "b", ("e1",), NOW,
                       lifecycle=MemoryLifecycle.ARCHIVED)
     rows = [
@@ -102,8 +103,11 @@ def test_memory_read_excludes_archived_by_default():
 
 
 def test_knowledge_and_relation_roundtrip_decoders():
-    knowledge = Knowledge("k1", "statement", "scope", ("e1",), .8, "active", 1, NOW)
-    relation = Relation("r1", "e1", "k1", RelationType.SUPPORTS, .9, NOW)
+    provenance = Provenance(("e1",), "x")
+    knowledge = Knowledge("k1", "statement", "scope", ("e1",), .8, "active", 1, NOW,
+                          provenance=provenance)
+    relation = Relation("r1", "e1", "k1", RelationType.SUPPORTS, .9, NOW,
+                        provenance=provenance)
     krow = (knowledge.id, knowledge.statement, knowledge.scope, ["e1"], knowledge.confidence,
             knowledge.status, knowledge.version, knowledge.created_at, None, None,
             {"source_ids":["e1"],"derivation":"x","schema_version":1})
