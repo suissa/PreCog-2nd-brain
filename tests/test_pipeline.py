@@ -420,3 +420,68 @@ def test_apply_terminal_outcome_closes_trajectory_once() -> None:
     assert closed.evidence_ids == ("e3",)
     with pytest.raises(ValueError, match="already terminal"):
         apply_terminal_outcome(closed, terminal)
+
+
+def test_reconstruct_state_from_evidence_is_deterministic() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import reconstruct_state
+
+    p = Provenance("source-reconstruct", "test", NOW, "unit")
+    state = make_state()
+    transition = make_transition("t-reconstruct")
+    evidence = (
+        Evidence(
+            "e1",
+            transition.id,
+            "appointment booked",
+            NOW,
+            p,
+            supports=("appointment booked",),
+        ),
+    )
+    first = reconstruct_state(state, transition, evidence)
+    second = reconstruct_state(state, transition, evidence)
+    assert first == second
+    assert first.predecessor_state_id == state.id
+    assert first.conditions == (("appointment booked", ConditionStatus.TRUE),)
+
+
+def test_reconstruct_state_preserves_contradiction_and_unknown() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import reconstruct_state
+
+    p = Provenance("source-reconstruct-contradiction", "test", NOW, "unit")
+    state = make_state()
+    transition = make_transition("t-reconstruct-contradiction")
+    evidence = (
+        Evidence(
+            "e1",
+            transition.id,
+            "appointment booked",
+            NOW,
+            p,
+            contradicts=("appointment booked",),
+        ),
+    )
+    rebuilt = reconstruct_state(state, transition, evidence)
+    assert rebuilt.conditions == (("appointment booked", ConditionStatus.UNKNOWN),)
+    assert rebuilt.contradictions == ("appointment booked",)
+
+
+def test_reconstruct_state_rejects_missing_evidence() -> None:
+    from intent_trajectory.pipeline import reconstruct_state
+
+    with pytest.raises(ValueError, match="requires evidence"):
+        reconstruct_state(make_state(), make_transition("t-empty"), ())
+
+
+def test_reconstruct_state_rejects_unrelated_evidence() -> None:
+    from intent_trajectory.domain import Evidence
+    from intent_trajectory.pipeline import reconstruct_state
+
+    p = Provenance("source-reconstruct-unrelated", "test", NOW, "unit")
+    evidence = (
+        Evidence("e1", "other-transition", "unrelated", NOW, p),
+    )
+    with pytest.raises(ValueError, match="does not belong"):
+        reconstruct_state(make_state(), make_transition("t-reconstruct"), evidence)
