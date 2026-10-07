@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timezone
 
-from .models import Experience, Knowledge, Memory, MemoryLifecycle, Relation, Trajectory
+from .models import Experience, Knowledge, Memory, MemoryLifecycle, Relation, RelationType, Trajectory, Provenance
 
 
 class InMemoryStore:
@@ -68,6 +68,85 @@ class InMemoryStore:
         if include_archived:
             return tuple(self._memories.values())
         return tuple(m for m in self._memories.values() if m.lifecycle != MemoryLifecycle.ARCHIVED)
+
+    def memories_at(self, at: datetime) -> tuple[Memory, ...]:
+        return tuple(
+            m for m in self._memories.values()
+            if m.is_valid_at(at) and m.lifecycle != MemoryLifecycle.ARCHIVED
+        )
+
+    def current_memories(self) -> tuple[Memory, ...]:
+        return tuple(m for m in self._memories.values() if m.is_current)
+
+    def historical_memories(self, at: datetime) -> tuple[Memory, ...]:
+        return tuple(
+            m for m in self._memories.values()
+            if m.valid_to is not None and m.valid_to <= at
+        )
+
+    def record_supersession(
+        self,
+        old_memory_id: str,
+        new_memory_id: str,
+        *,
+        at: datetime,
+        provenance: "Provenance",
+        confidence: float = 1.0,
+    ) -> Relation:
+        old = self._memories[old_memory_id]
+        new = self._memories[new_memory_id]
+        if at < old.created_at:
+            raise ValueError("supersession cannot precede old memory creation")
+        if new.valid_from is not None and new.valid_from < at:
+            raise ValueError("new memory is valid before supersession time")
+        closed = replace(old, valid_to=at)
+        self._memories[old.id] = closed
+        self._memory_history[old.id] = self._memory_history[old.id] + (closed,)
+        relation = Relation(
+            f"supersedes:{old.id}:{new.id}",
+            old.id,
+            new.id,
+            RelationType.SUPERSEDES,
+            confidence,
+            at,
+            valid_from=at,
+            provenance=provenance,
+        )
+        self.put_relation(relation)
+        return relation
+
+    def record_contradiction(
+        self,
+        left_memory_id: str,
+        right_memory_id: str,
+        *,
+        at: datetime,
+        provenance: "Provenance",
+        confidence: float,
+    ) -> Relation:
+        if left_memory_id == right_memory_id:
+            raise ValueError("contradiction endpoints must differ")
+        self._memories[left_memory_id]
+        self._memories[right_memory_id]
+        relation = Relation(
+            f"contradicts:{left_memory_id}:{right_memory_id}",
+            left_memory_id,
+            right_memory_id,
+            RelationType.CONTRADICTS,
+            confidence,
+            at,
+            valid_from=at,
+            provenance=provenance,
+        )
+        self.put_relation(relation)
+        return relation
+
+    def contradictions(self, memory_id: str) -> tuple[Relation, ...]:
+        return tuple(
+            r for r in self._relations.values()
+            if r.relation_type is RelationType.CONTRADICTS
+            and (r.source_id == memory_id or r.target_id == memory_id)
+        )
 
     def put_knowledge(self, knowledge: Knowledge) -> None:
         if any(not self._exists(i) for i in knowledge.evidence_ids):
