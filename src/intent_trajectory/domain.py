@@ -383,10 +383,16 @@ class DestinationValidation:
         )
         if self.outcome == TerminalStatus.REACHED and not reached:
             raise ValueError("Reached requires every completion predicate")
+        if self.outcome == TerminalStatus.REACHED and not self.evidence:
+            raise ValueError("Reached requires validation evidence")
         if self.outcome == TerminalStatus.BLOCKED and self.constraints_satisfied:
             raise ValueError("Blocked requires an unsatisfied constraint")
         if self.outcome == TerminalStatus.INVALIDATED and not self.failure_conditions_triggered:
             raise ValueError("Invalidated requires a triggered failure condition")
+        if self.outcome == TerminalStatus.UNDETERMINED and not (
+            self.unresolved_contradictions or not self.required_evidence_satisfied
+        ):
+            raise ValueError("Undetermined requires unresolved evidence or contradiction")
 
 
 @dataclass(frozen=True, slots=True)
