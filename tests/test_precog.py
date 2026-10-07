@@ -126,3 +126,12 @@ def test_migration_is_monotonic() -> None:
     validate_migration_version(2, 1)
     with pytest.raises(ValueError):
         validate_migration_version(4, 1)
+
+
+def test_experience_recorded_at_is_assigned_by_store() -> None:
+    store = InMemoryStore()
+    e = experience("e9")
+    store.append_experience(e)
+    stored = store.experiences()[0]
+    assert stored.occurred_at == e.occurred_at
+    assert stored.recorded_at >= e.recorded_at
