@@ -47,5 +47,5 @@ def test_deleted_projection_can_be_regenerated_from_source() -> None:
 
 def test_frontmatter_is_machine_valid_yaml_json_subset() -> None:
     projection = MarkdownProjector().memory(memory())
-    frontmatter = projection.content.split("---\\n", 2)[1].split("\\n---", 1)[0]
+    frontmatter = projection.content.split("---\n", 2)[1].split("\n---", 1)[0]
     assert json.loads(frontmatter)["object_id"] == "m1"
