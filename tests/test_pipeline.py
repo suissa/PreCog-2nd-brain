@@ -11,9 +11,9 @@ from intent_trajectory.domain import (
     Provenance,
     SemanticState,
     TerminalStatus,
-    TrajectoryStatus,
+    Trajectory, TrajectoryStatus,
     Transition,
-    TransitionStatus,
+    TransitionStatus, Goal, DestinationContract,
 )
 from intent_trajectory.pipeline import (
     contextualize,
@@ -61,7 +61,7 @@ def make_state(state_id: str = "s0") -> SemanticState:
     return SemanticState(state_id, ("customer known",), (), (Provenance("state", "test", NOW, "unit"),))
 
 
-def make_destination() -> tuple[Intent, object, object, object, tuple[Constraint, ...]]:
+def make_destination() -> tuple[Intent, Goal, tuple[Constraint, ...], DestinationContract, tuple[Constraint, ...]]:
     i = intent()
     u = understand(i)
     n = normalize(u)
@@ -325,9 +325,8 @@ def test_replan_rejects_terminal_trajectory() -> None:
         )
 
 
-def make_trajectory() -> tuple[object, object, object, object, object]:
+def make_trajectory() -> tuple[Trajectory, Intent, Goal, tuple[Constraint, ...], DestinationContract]:
     i, g, constraints, d, _ = make_destination()
-    from intent_trajectory.domain import Trajectory
     trajectory = Trajectory(
         id="trajectory:i1:1",
         intent_id=i.id,
