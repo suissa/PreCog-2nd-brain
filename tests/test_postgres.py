@@ -10,8 +10,9 @@ NOW = datetime.now(timezone.utc)
 
 
 class Cursor:
-    def __init__(self, rows=()):
+    def __init__(self, rows=(), fetchone_values=None):
         self.rows = list(rows)
+        self.fetchone_values = list(fetchone_values or [])
         self.executed = []
 
     def __enter__(self):
@@ -24,6 +25,8 @@ class Cursor:
         self.executed.append((query, params))
 
     def fetchone(self):
+        if self.fetchone_values:
+            return self.fetchone_values.pop(0)
         return self.rows[0] if self.rows else None
 
     def fetchall(self):
@@ -70,20 +73,14 @@ def test_append_experience_is_idempotent():
 
 def test_append_rejects_same_id_with_different_content():
     e = experience()
-    conn = Connection([])
-    store = PostgresStore(conn)
-    assert store.append_experience(e) is True
-
-    existing = Connection([row(e)])
-    existing.cursor_obj.rows = [row(e._replace())] if hasattr(e, "_replace") else [row(e)]
-    # Simulate a conflicting database record returned by get_experience.
     other = Experience(
         e.id, e.trajectory_id, e.occurred_at, e.recorded_at, e.actor,
         "different", e.payload, e.provenance,
     )
-    existing.cursor_obj.rows = [row(other)]
+    conn = Connection(fetchone_values=[None, row(other)])
     with pytest.raises(ValueError, match="different content"):
-        PostgresStore(existing).append_experience(e)
+        PostgresStore(conn).append_experience(e)
+
 
 
 def test_experiences_filters_by_trajectory():
