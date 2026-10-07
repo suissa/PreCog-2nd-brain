@@ -16,6 +16,7 @@ from .domain import (
     NormalizedIntent,
     OutcomeStatus,
     TerminalOutcome,
+    Trajectory,
     TerminalStatus,
     TrajectoryStatus,
     Transition,
