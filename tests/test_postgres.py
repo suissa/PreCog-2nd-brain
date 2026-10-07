@@ -98,7 +98,7 @@ def test_memory_read_excludes_archived_by_default():
     rows = [
         (active.id, active.memory_type.value, active.content, ["e1"], NOW, None, None,
          active.confidence, active.salience, active.lifecycle.value,
-         {"source_ids":["e1"],"derivation":"x","schema_version":1}, {}, 1)
+         {"source_ids":["e1"],"derivation":"x","schema_version":1}, {}, 1, 1)
     ]
     conn = Connection(rows)
     result = PostgresStore(conn).memories()
