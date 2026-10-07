@@ -215,6 +215,46 @@ class PostgresStore:
         if set(ids) - found:
             raise ValueError("provenance references unknown source")
 
+    def search_memory_candidates(
+        self, query: str, *, now: Any, limit: int = 10,
+    ) -> tuple[tuple[str, float, float, float, float], ...]:
+        """Run the database-native lexical/temporal retrieval projection.
+
+        Returns (memory_id, lexical, temporal, relation, score). Semantic/vector
+        reranking remains an optional provider adapter and never becomes canonical.
+        """
+        limit = max(0, limit)
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """WITH candidates AS (
+                    SELECT m.memory_id,
+                           ts_rank(to_tsvector('simple', m.content),
+                                   plainto_tsquery('simple', %s)) AS lexical_score,
+                           CASE
+                               WHEN m.valid_from IS NOT NULL AND %s < m.valid_from THEN 0.0
+                               WHEN m.valid_to IS NOT NULL AND %s > m.valid_to THEN 0.0
+                               WHEN m.valid_from IS NULL AND m.valid_to IS NULL THEN 0.5
+                               ELSE 1.0
+                           END AS temporal_score,
+                           COALESCE((SELECT MAX(r.confidence)
+                                     FROM relation r
+                                     WHERE r.target_id = m.memory_id
+                                        OR r.source_id = m.memory_id), 0.0) AS relation_score
+                    FROM memory m
+                    WHERE m.lifecycle <> 'archived'
+                )
+                SELECT memory_id, lexical_score, temporal_score, relation_score,
+                       LEAST(1.0, 0.45 * LEAST(1.0, lexical_score) +
+                                   0.15 * temporal_score + 0.10 * relation_score) AS score
+                FROM candidates
+                WHERE lexical_score > 0 OR temporal_score > 0 OR relation_score > 0
+                ORDER BY score DESC, memory_id
+                LIMIT %s""",
+                (query, now, now, limit),
+            )
+            rows = cursor.fetchall()
+        return tuple((r[0], float(r[1]), float(r[2]), float(r[3]), float(r[4])) for r in rows)
+
     @staticmethod
     def _json(value: Any) -> str:
         return json.dumps(value, separators=(",", ":"), sort_keys=True, default=str)
