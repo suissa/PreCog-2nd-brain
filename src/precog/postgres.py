@@ -148,8 +148,8 @@ class PostgresStore:
         """Run deterministic PostgreSQL full-text retrieval over canonical memory."""
         if not query.strip() or limit <= 0:
             return ()
-        clauses = ["m.lifecycle <> %s", "to_tsvector('simple', m.content) @@ websearch_to_tsquery('simple', %s)"]
-        params: list[Any] = [MemoryLifecycle.ARCHIVED.value, query]
+        clauses = ["m.lifecycle <> %s", "(to_tsvector('simple', m.content) @@ websearch_to_tsquery('simple', %s) OR m.memory_id ILIKE %s OR m.content ILIKE %s)"]
+        params: list[Any] = [MemoryLifecycle.ARCHIVED.value, query, `%${query}%`, `%${query}%`]
         if at is not None:
             clauses.append("(m.valid_from IS NULL OR m.valid_from <= %s)")
             clauses.append("(m.valid_to IS NULL OR m.valid_to > %s)")
