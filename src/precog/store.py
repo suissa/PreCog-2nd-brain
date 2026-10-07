@@ -78,6 +78,17 @@ class InMemoryStore:
     def current_memories(self) -> tuple[Memory, ...]:
         return tuple(m for m in self._memories.values() if m.is_current)
 
+    def current_consistent_memories(self) -> tuple[Memory, ...]:
+        conflicted = {
+            endpoint
+            for relation in self._relations.values()
+            if relation.relation_type is RelationType.CONTRADICTS
+            for endpoint in (relation.source_id, relation.target_id)
+        }
+        return tuple(
+            m for m in self.current_memories() if m.id not in conflicted
+        )
+
     def historical_memories(self, at: datetime) -> tuple[Memory, ...]:
         return tuple(
             m for m in self._memories.values()
