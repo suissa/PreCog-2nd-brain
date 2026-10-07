@@ -83,3 +83,88 @@ def test_semantic_retriever_delegates_query_embedding_to_provider():
     result = SemanticRetriever(FakeStore(), DeterministicEmbeddingProvider(4)).search("payment failed")
     assert result[0].object_id == "m1"
     assert result[0].semantic_score == 0.8
+
+
+def test_hybrid_candidate_union_deduplicates_and_exposes_components():
+    from precog.retrieval import HybridRetriever
+    store = InMemoryStore()
+    first = memory(store, "m-a", "payment failure")
+    second = memory(store, "m-b", "payment success")
+    lexical = LexicalRetriever(store).search("payment", at=NOW)
+    duplicate = lexical[0]
+    result = HybridRetriever(store).search(
+        "payment", now=NOW,
+        lexical_candidates=(duplicate,),
+        semantic_candidates=(
+            type(duplicate)(
+                second.id, 0.8, 0.0, 0.8, 0.0, 0.0,
+                second.provenance, second.lifecycle, "memory"
+            ),
+            duplicate,
+        ),
+        metadata_scores={first.id: 0.9},
+    )
+    ids = [item.object_id for item in result]
+    assert set(ids) == {first.id, second.id}
+    first_result = next(item for item in result if item.object_id == first.id)
+    assert first_result.lexical_score > 0
+    assert first_result.semantic_score > 0
+    assert first_result.metadata_score == 0.9
+    assert len(ids) == len(set(ids))
+
+
+def test_hybrid_temporal_and_lifecycle_filters_run_before_union():
+    from precog.retrieval import HybridRetriever
+    store = InMemoryStore()
+    current = memory(store, "m-current", "release error", valid_from=NOW - timedelta(days=1))
+    future = memory(store, "m-future", "release error", valid_from=NOW + timedelta(days=1))
+    archived = memory(store, "m-archived", "release error", lifecycle=MemoryLifecycle.ARCHIVED)
+    candidates = tuple(
+        LexicalRetriever(store).search("release error", at=None, limit=10)
+    )
+    result = HybridRetriever(store).search(
+        "release error", now=NOW, lexical_candidates=candidates
+    )
+    assert [item.object_id for item in result] == [current.id]
+    assert future.id not in {item.object_id for item in result}
+    assert archived.id not in {item.object_id for item in result}
+
+
+def test_hybrid_deterministic_tie_breaks_by_object_id():
+    from precog.retrieval import HybridRetriever
+    store = InMemoryStore()
+    a = memory(store, "m-a", "same")
+    b = memory(store, "m-b", "same")
+    result1 = HybridRetriever(store).search("same", now=NOW)
+    result2 = HybridRetriever(store).search("same", now=NOW)
+    assert [x.object_id for x in result1] == [x.object_id for x in result2]
+    assert [x.object_id for x in result1] == sorted([a.id, b.id])
+
+
+def test_hybrid_vector_only_is_supported():
+    from precog.retrieval import HybridRetriever
+    store = InMemoryStore()
+    first = memory(store, "m-a", "unrelated")
+    memory(store, "m-b", "other")
+    result = HybridRetriever(store).search(
+        "vector query", now=NOW,
+        query_vector=(1.0, 0.0),
+        vectors={first.id: (1.0, 0.0)}
+    )
+    assert [item.object_id for item in result] == [first.id]
+    assert result[0].semantic_score == 1.0
+
+
+def test_optional_reranker_is_not_canonical():
+    from precog.retrieval import HybridRetriever
+    store = InMemoryStore()
+    memory(store, "m-a", "alpha")
+    memory(store, "m-b", "alpha")
+    retriever = HybridRetriever(store)
+    canonical = retriever.search("alpha", now=NOW)
+    class Reverse:
+        def rerank(self, candidates):
+            return tuple(reversed(candidates))
+    reranked = retriever.search("alpha", now=NOW, reranker=Reverse())
+    assert [x.object_id for x in canonical] != [x.object_id for x in reranked]
+    assert {x.object_id for x in canonical} == {x.object_id for x in reranked}
