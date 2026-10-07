@@ -1,4 +1,5 @@
 """PreCog persistent cognitive substrate reference implementation."""
+from .embeddings import EmbeddingProvider, EmbeddingRecord, DeterministicEmbeddingProvider, build_embedding, is_embedding_current
 from .models import Behavior, Experience, Knowledge, Memory, MemoryLifecycle, MemoryType, Relation, RelationType, RetrievalEvidence, Trajectory
 from .store import InMemoryStore
 from .postgres import PostgresStore
@@ -17,6 +18,7 @@ from .evolution import CapabilityEvolution, EvolutionDecision, Manager, Healer, 
 from .continual import ChampionChallenger, ModelCandidate, PromotionDecision
 
 __all__ = [
+    "EmbeddingProvider","EmbeddingRecord","DeterministicEmbeddingProvider","build_embedding","is_embedding_current",
     "Behavior","Experience","Knowledge","Memory","MemoryLifecycle","MemoryType",
     "Relation","RelationType","RetrievalEvidence","Trajectory","InMemoryStore","PostgresStore",
     "HybridRetriever","LexicalRetriever","Consolidator","ConsolidationProposal","Dreamer","DreamReport",
