@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from precog.models import Behavior, Experience, Provenance, RetrievalEvidence, MemoryLifecycle
 from precog.next_action import BestNextActionSelector
-from precog.prediction import BehaviorPredictor
+from precog.prediction import BehaviorPrediction, BehaviorPredictor
 from precog.retrieval_repository import InMemoryRetrievalRepository
 from precog.store import InMemoryStore
 
@@ -40,7 +40,7 @@ def test_prediction_can_be_driven_by_retrieved_evidence() -> None:
 
 
 def test_next_action_retains_retrieval_evidence_in_rationale() -> None:
-    prediction = __import__("precog.prediction", fromlist=["BehaviorPrediction"]).BehaviorPrediction(
+    prediction = BehaviorPrediction(
         "b1", 0.9, ("e1",)
     )
     evidence = RetrievalEvidence(
