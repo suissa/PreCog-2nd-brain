@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Sequence
@@ -38,6 +38,15 @@ class EvaluationDecision(str, Enum):
     CONTINUE = "continue"
     REPLAN = "replan"
     VALIDATE = "validate"
+    BLOCKED = "blocked"
+    INVALIDATED = "invalidated"
+    UNDETERMINED = "undetermined"
+
+
+class TrajectoryStatus(str, Enum):
+    ACTIVE = "active"
+    REACHED = "reached"
+    NOT_REACHED = "not_reached"
     BLOCKED = "blocked"
     INVALIDATED = "invalidated"
     UNDETERMINED = "undetermined"
@@ -378,7 +387,7 @@ class Trajectory:
     plan_ids: tuple[str, ...]
     transition_ids: tuple[str, ...]
     evidence_ids: tuple[str, ...]
-    status: TerminalStatus | str
+    status: TrajectoryStatus
     version: int
     provenance: Provenance
 
