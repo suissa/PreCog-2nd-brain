@@ -97,6 +97,10 @@ def test_hybrid_candidate_union_deduplicates_and_exposes_components():
         lexical_candidates=(duplicate,),
         semantic_candidates=(
             type(duplicate)(
+                first.id, 0.8, 0.0, 0.8, 0.0, 0.0,
+                first.provenance, first.lifecycle, "memory"
+            ),
+            type(duplicate)(
                 second.id, 0.8, 0.0, 0.8, 0.0, 0.0,
                 second.provenance, second.lifecycle, "memory"
             ),
