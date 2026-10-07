@@ -135,6 +135,58 @@ class PostgresStore:
             rows = cursor.fetchall()
         return tuple(self._memory_from_row(r) for r in rows)
 
+    def lexical_search(
+        self,
+        query: str,
+        *,
+        at: datetime | None = None,
+        tenant_id: str | None = None,
+        actor: str | None = None,
+        lifecycle: Sequence[str] | None = None,
+        limit: int = 10,
+    ) -> tuple[dict[str, Any], ...]:
+        """Run deterministic PostgreSQL full-text retrieval over canonical memory."""
+        if not query.strip() or limit <= 0:
+            return ()
+        clauses = ["m.lifecycle <> %s", "to_tsvector('simple', m.content) @@ websearch_to_tsquery('simple', %s)"]
+        params: list[Any] = [MemoryLifecycle.ARCHIVED.value, query]
+        if at is not None:
+            clauses.append("(m.valid_from IS NULL OR m.valid_from <= %s)")
+            clauses.append("(m.valid_to IS NULL OR m.valid_to > %s)")
+            params.extend((at, at))
+        if tenant_id is not None:
+            clauses.append("m.metadata ->> 'tenant_id' = %s")
+            params.append(tenant_id)
+        if actor is not None:
+            clauses.append("m.metadata ->> 'actor' = %s")
+            params.append(actor)
+        if lifecycle:
+            placeholders = ",".join(["%s"] * len(lifecycle))
+            clauses.append(f"m.lifecycle IN ({placeholders})")
+            params.extend(lifecycle)
+        params.append(limit)
+        sql = f"""
+            SELECT m.memory_id,
+                   ts_rank_cd(to_tsvector('simple', m.content),
+                              websearch_to_tsquery('simple', %s)) AS score,
+                   m.provenance, m.lifecycle
+            FROM memory m
+            WHERE {" AND ".join(clauses)}
+            ORDER BY score DESC, m.memory_id ASC
+            LIMIT %s
+        """
+        params_for_rank = [query, *params]
+        with self._connection.cursor() as cursor:
+            cursor.execute(sql, tuple(params_for_rank))
+            rows = cursor.fetchall()
+        return tuple({
+            "object_id": row[0],
+            "score": float(row[1]),
+            "provenance": self._provenance(row[2]),
+            "lifecycle": MemoryLifecycle(row[3]),
+            "source_type": "memory",
+        } for row in rows)
+
     def put_knowledge(self, knowledge: Knowledge) -> None:
         self._require_sources(knowledge.evidence_ids)
         with self._connection.cursor() as cursor:
