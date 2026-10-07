@@ -23,6 +23,3 @@ addopts = "-q"
 python_version = "3.11"
 strict = true
 packages = ["intent_trajectory"]
-
-[project.scripts]
-validate-traceability = "scripts.validate_traceability:main"
