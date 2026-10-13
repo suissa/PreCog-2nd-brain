@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from typing import Any
 
 from .promotion_audit import PromotionAuditEvent, PromotionAuditWriter
@@ -10,8 +9,8 @@ from .promotion_audit import PromotionAuditEvent, PromotionAuditWriter
 class PostgresPromotionAuditLog(PromotionAuditWriter):
     """Durable append-only promotion audit sink using a DB-API connection.
 
-    Apply sql/002_promotion_audit.sql before use. The database migration installs
-    a trigger that rejects UPDATE and DELETE operations on audit rows.
+    Apply sql/002_promotion_audit.sql before use. The migration installs
+    triggers that reject UPDATE, DELETE and TRUNCATE operations on audit rows.
     """
 
     def __init__(self, connection: Any) -> None:
@@ -66,11 +65,15 @@ class PostgresPromotionAuditLog(PromotionAuditWriter):
                 (event.id,),
             )
             row = cursor.fetchone()
+
         if row is None:
+            self._connection.rollback()
             raise RuntimeError("promotion audit conflict row disappeared")
         existing = self._event_from_row(row)
         if existing != event:
+            self._connection.rollback()
             raise ValueError("promotion audit event ID reused with conflicting content")
+        self._connection.commit()
         return False
 
     def list_events(self, *, limit: int = 1000) -> tuple[PromotionAuditEvent, ...]:
@@ -89,6 +92,7 @@ class PostgresPromotionAuditLog(PromotionAuditWriter):
                 (limit,),
             )
             rows = cursor.fetchall()
+        self._connection.commit()
         return tuple(self._event_from_row(row) for row in rows)
 
     @staticmethod
