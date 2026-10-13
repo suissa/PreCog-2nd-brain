@@ -14,7 +14,7 @@ from .evaluation import EvaluationReport, Evaluator
 from .outcome_evaluation import OutcomeEvaluator, OutcomeEvaluationReport, PredictionObservation
 from .contract import DataClass, FieldPolicy, PrivacyPolicy, validate_migration_version, validate_temporal_interval
 from .trajectory import reconstruct_trajectory, validate_experience_temporal_order
-from .relations import RelationGraph
+from .relations import RelationGraph, RelationPath
 from .projection import MarkdownProjection, MarkdownProjector, ProjectionError, project_knowledge, project_memory
 from .ranker import BehaviorRanker, JevRankerAdapter
 from .next_action import BestNextAction, BestNextActionSelector
@@ -31,7 +31,7 @@ __all__ = [
     "BehaviorPredictor","BehaviorPrediction","CapabilityCandidate","CapabilityValidator",
     "EvaluationReport","Evaluator","OutcomeEvaluator","OutcomeEvaluationReport","PredictionObservation","DataClass","FieldPolicy","PrivacyPolicy",
     "validate_migration_version","validate_temporal_interval","reconstruct_trajectory",
-    "validate_experience_temporal_order","RelationGraph","BehaviorRanker","JevRankerAdapter",
+    "validate_experience_temporal_order","RelationGraph","RelationPath","BehaviorRanker","JevRankerAdapter",
     "BestNextAction","BestNextActionSelector","ExecutionFeedbackRecorder","ExecutionResult","RecordedExecution","CapabilityEvolution","EvolutionDecision",
     "Manager","Healer","Judge","ChampionChallenger","ModelCandidate","PromotionDecision","OutcomePromotionDecision","outcome_quality",
     "MarkdownProjection","MarkdownProjector","ProjectionError","project_knowledge","project_memory",

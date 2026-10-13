@@ -6,8 +6,14 @@ from datetime import datetime, timezone
 from .models import Experience, Knowledge, Memory, MemoryLifecycle, Relation, RelationType, Trajectory, Provenance
 
 
+ACYCLIC_RELATIONS = {
+    RelationType.DERIVED_FROM, RelationType.CAUSED_BY, RelationType.GENERALIZES,
+    RelationType.SPECIALIZES, RelationType.SUPERSEDES, RelationType.FOLLOWS,
+}
+
+
 class InMemoryStore:
-    """Deterministic reference store for the canonical source-of-truth boundary."""
+    """Deterministic reference store with auditable, provenance-linked relations."""
 
     def __init__(self) -> None:
         self._experiences: dict[str, Experience] = {}
@@ -16,6 +22,7 @@ class InMemoryStore:
         self._memory_history: dict[str, tuple[Memory, ...]] = {}
         self._knowledge: dict[str, Knowledge] = {}
         self._relations: dict[str, Relation] = {}
+        self._relation_deletion_audit: list[tuple[Relation, datetime]] = []
 
     def append_experience(self, experience: Experience) -> bool:
         existing = self._experiences.get(experience.id)
@@ -23,8 +30,7 @@ class InMemoryStore:
             if existing != replace(experience, recorded_at=existing.recorded_at):
                 raise ValueError("experience id already exists with different content")
             return False
-        stored = replace(experience, recorded_at=datetime.now(timezone.utc))
-        self._experiences[experience.id] = stored
+        self._experiences[experience.id] = replace(experience, recorded_at=datetime.now(timezone.utc))
         return True
 
     def experiences(self, trajectory_id: str | None = None) -> tuple[Experience, ...]:
@@ -49,12 +55,8 @@ class InMemoryStore:
             if memory.version != existing.version + 1:
                 raise ValueError("memory version must advance exactly by one")
             if not existing.lifecycle.can_transition_to(memory.lifecycle):
-                raise ValueError(
-                    f"illegal memory lifecycle transition: "
-                    f"{existing.lifecycle.value} -> {memory.lifecycle.value}"
-                )
-            history = self._memory_history.get(memory.id, (existing,))
-            self._memory_history[memory.id] = history + (memory,)
+                raise ValueError(f"illegal memory lifecycle transition: {existing.lifecycle.value} -> {memory.lifecycle.value}")
+            self._memory_history[memory.id] = self._memory_history.get(memory.id, (existing,)) + (memory,)
         else:
             if memory.version != 1:
                 raise ValueError("new memory must start at version 1")
@@ -65,45 +67,22 @@ class InMemoryStore:
         return self._memory_history[memory_id]
 
     def memories(self, include_archived: bool = False) -> tuple[Memory, ...]:
-        if include_archived:
-            return tuple(self._memories.values())
-        return tuple(m for m in self._memories.values() if m.lifecycle != MemoryLifecycle.ARCHIVED)
+        return tuple(self._memories.values()) if include_archived else tuple(m for m in self._memories.values() if m.lifecycle != MemoryLifecycle.ARCHIVED)
 
     def memories_at(self, at: datetime) -> tuple[Memory, ...]:
-        return tuple(
-            m for m in self._memories.values()
-            if m.is_valid_at(at) and m.lifecycle != MemoryLifecycle.ARCHIVED
-        )
+        return tuple(m for m in self._memories.values() if m.is_valid_at(at) and m.lifecycle != MemoryLifecycle.ARCHIVED)
 
     def current_memories(self) -> tuple[Memory, ...]:
         return tuple(m for m in self._memories.values() if m.is_current)
 
     def current_consistent_memories(self) -> tuple[Memory, ...]:
-        conflicted = {
-            endpoint
-            for relation in self._relations.values()
-            if relation.relation_type is RelationType.CONTRADICTS
-            for endpoint in (relation.source_id, relation.target_id)
-        }
-        return tuple(
-            m for m in self.current_memories() if m.id not in conflicted
-        )
+        conflicted = {endpoint for relation in self._relations.values() if relation.relation_type is RelationType.CONTRADICTS for endpoint in (relation.source_id, relation.target_id)}
+        return tuple(m for m in self.current_memories() if m.id not in conflicted)
 
     def historical_memories(self, at: datetime) -> tuple[Memory, ...]:
-        return tuple(
-            m for m in self._memories.values()
-            if m.valid_to is not None and m.valid_to <= at
-        )
+        return tuple(m for m in self._memories.values() if m.valid_to is not None and m.valid_to <= at)
 
-    def record_supersession(
-        self,
-        old_memory_id: str,
-        new_memory_id: str,
-        *,
-        at: datetime,
-        provenance: "Provenance",
-        confidence: float = 1.0,
-    ) -> Relation:
+    def record_supersession(self, old_memory_id: str, new_memory_id: str, *, at: datetime, provenance: Provenance, confidence: float = 1.0) -> Relation:
         old = self._memories[old_memory_id]
         new = self._memories[new_memory_id]
         if at < old.created_at:
@@ -113,51 +92,21 @@ class InMemoryStore:
         closed = replace(old, valid_to=at)
         self._memories[old.id] = closed
         self._memory_history[old.id] = self._memory_history[old.id] + (closed,)
-        relation = Relation(
-            f"supersedes:{old.id}:{new.id}",
-            old.id,
-            new.id,
-            RelationType.SUPERSEDES,
-            confidence,
-            at,
-            valid_from=at,
-            provenance=provenance,
-        )
+        relation = Relation(f"supersedes:{old.id}:{new.id}", old.id, new.id, RelationType.SUPERSEDES, confidence, at, valid_from=at, provenance=provenance)
         self.put_relation(relation)
         return relation
 
-    def record_contradiction(
-        self,
-        left_memory_id: str,
-        right_memory_id: str,
-        *,
-        at: datetime,
-        provenance: "Provenance",
-        confidence: float,
-    ) -> Relation:
+    def record_contradiction(self, left_memory_id: str, right_memory_id: str, *, at: datetime, provenance: Provenance, confidence: float) -> Relation:
         if left_memory_id == right_memory_id:
             raise ValueError("contradiction endpoints must differ")
         self._memories[left_memory_id]
         self._memories[right_memory_id]
-        relation = Relation(
-            f"contradicts:{left_memory_id}:{right_memory_id}",
-            left_memory_id,
-            right_memory_id,
-            RelationType.CONTRADICTS,
-            confidence,
-            at,
-            valid_from=at,
-            provenance=provenance,
-        )
+        relation = Relation(f"contradicts:{left_memory_id}:{right_memory_id}", left_memory_id, right_memory_id, RelationType.CONTRADICTS, confidence, at, valid_from=at, provenance=provenance)
         self.put_relation(relation)
         return relation
 
     def contradictions(self, memory_id: str) -> tuple[Relation, ...]:
-        return tuple(
-            r for r in self._relations.values()
-            if r.relation_type is RelationType.CONTRADICTS
-            and (r.source_id == memory_id or r.target_id == memory_id)
-        )
+        return tuple(r for r in self._relations.values() if r.relation_type is RelationType.CONTRADICTS and (r.source_id == memory_id or r.target_id == memory_id))
 
     def put_knowledge(self, knowledge: Knowledge) -> None:
         if any(not self._exists(i) for i in knowledge.evidence_ids):
@@ -168,21 +117,50 @@ class InMemoryStore:
         return tuple(self._knowledge.values())
 
     def put_relation(self, relation: Relation) -> None:
+        if relation.id in self._relations:
+            if self._relations[relation.id] != relation:
+                raise ValueError("relation id already exists with different content")
+            return
         if not self._exists(relation.source_id) or not self._exists(relation.target_id):
             raise ValueError("relation endpoints must exist")
+        if not relation.provenance.source_ids or any(not self._exists(i) for i in relation.provenance.source_ids):
+            raise ValueError("relation provenance must reference existing objects")
+        if relation.relation_type in ACYCLIC_RELATIONS and self._would_cycle(relation.source_id, relation.target_id, relation.relation_type):
+            raise ValueError(f"cycle is not permitted for {relation.relation_type.value}")
         self._relations[relation.id] = relation
 
+    def _would_cycle(self, source_id: str, target_id: str, relation_type: RelationType) -> bool:
+        if source_id == target_id:
+            return True
+        pending = [target_id]
+        seen: set[str] = set()
+        while pending:
+            current = pending.pop()
+            if current == source_id:
+                return True
+            if current in seen:
+                continue
+            seen.add(current)
+            pending.extend(r.target_id for r in self._relations.values() if r.relation_type is relation_type and r.source_id == current)
+        return False
+
+    def delete_relation(self, relation_id: str, *, deleted_at: datetime | None = None) -> Relation:
+        relation = self._relations.pop(relation_id)
+        timestamp = deleted_at or datetime.now(timezone.utc)
+        if timestamp.tzinfo is None:
+            self._relations[relation_id] = relation
+            raise ValueError("deletion timestamp must be timezone-aware")
+        self._relation_deletion_audit.append((relation, timestamp))
+        return relation
+
+    def relation_deletion_audit(self) -> tuple[tuple[Relation, datetime], ...]:
+        return tuple(self._relation_deletion_audit)
+
     def relations(self) -> tuple[Relation, ...]:
-        return tuple(self._relations.values())
+        return tuple(sorted(self._relations.values(), key=lambda r: (r.relation_type.value, r.source_id, r.target_id, r.id)))
 
     def _exists(self, object_id: str) -> bool:
         return object_id in self._experiences or object_id in self._memories or object_id in self._knowledge
 
     def rebuildable_snapshot(self) -> dict[str, int]:
-        return {
-            "experiences": len(self._experiences),
-            "trajectories": len(self._trajectories),
-            "memories": len(self._memories),
-            "knowledge": len(self._knowledge),
-            "relations": len(self._relations),
-        }
+        return {"experiences": len(self._experiences), "trajectories": len(self._trajectories), "memories": len(self._memories), "knowledge": len(self._knowledge), "relations": len(self._relations)}
