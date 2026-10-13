@@ -37,12 +37,16 @@ class Connection:
     def __init__(self, rows=(), fetchone_values=()):
         self.cursor_obj = Cursor(rows, fetchone_values)
         self.commits = 0
+        self.rollbacks = 0
 
     def cursor(self):
         return self.cursor_obj
 
     def commit(self):
         self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
 
 
 def event(event_id="audit-1"):
@@ -95,7 +99,8 @@ def test_postgres_audit_append_is_idempotent_on_identical_replay():
     connection = Connection(fetchone_values=[None, row_for(item)])
 
     assert PostgresPromotionAuditLog(connection).append(item) is False
-    assert connection.commits == 0
+    assert connection.commits == 1
+    assert connection.rollbacks == 0
     assert len(connection.cursor_obj.executed) == 2
 
 
@@ -108,6 +113,7 @@ def test_postgres_audit_rejects_conflicting_event_id_replay():
 
     with pytest.raises(ValueError, match="conflicting content"):
         PostgresPromotionAuditLog(connection).append(item)
+    assert connection.rollbacks == 1
 
 
 def test_postgres_audit_lists_and_decodes_json_fields():
@@ -118,6 +124,7 @@ def test_postgres_audit_lists_and_decodes_json_fields():
     query, params = connection.cursor_obj.executed[0]
     assert "ORDER BY recorded_at, event_id" in query
     assert params == (1000,)
+    assert connection.commits == 1
 
 
 def test_postgres_audit_rejects_negative_limit():
