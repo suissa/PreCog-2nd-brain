@@ -6,7 +6,7 @@ from .store import InMemoryStore
 from .postgres import PostgresStore
 from .retrieval import HybridRetriever
 from .retrieval_repository import RetrievalRepository, InMemoryRetrievalRepository, PostgresRetrievalRepository
-from .consolidation import Consolidator, ConsolidationProposal
+from .consolidation import (Consolidator, ConsolidationProposal, ConsolidationEngine, ConsolidationReview, ConsolidationProviderError, DeterministicConsolidationAdapter, EvidenceClaim)
 from .dreaming import Dreamer, DreamReport
 from .prediction import BehaviorPredictor, BehaviorPrediction
 from .capability import CapabilityCandidate, CapabilityValidator
@@ -27,7 +27,7 @@ __all__ = [
     "EmbeddingProvider","EmbeddingRecord","DeterministicEmbeddingProvider","build_embedding","is_embedding_current",
     "Behavior","Experience","Knowledge","Memory","MemoryLifecycle","MemoryType",
     "Relation","RelationType","RetrievalEvidence","Trajectory","InMemoryStore","PostgresStore",
-    "HybridRetriever","RetrievalRepository","InMemoryRetrievalRepository","PostgresRetrievalRepository","Consolidator","ConsolidationProposal","Dreamer","DreamReport",
+    "HybridRetriever","RetrievalRepository","InMemoryRetrievalRepository","PostgresRetrievalRepository","Consolidator","ConsolidationProposal","ConsolidationEngine","ConsolidationReview","ConsolidationProviderError","DeterministicConsolidationAdapter","EvidenceClaim","Dreamer","DreamReport",
     "BehaviorPredictor","BehaviorPrediction","CapabilityCandidate","CapabilityValidator",
     "EvaluationReport","Evaluator","OutcomeEvaluator","OutcomeEvaluationReport","PredictionObservation","DataClass","FieldPolicy","PrivacyPolicy",
     "validate_migration_version","validate_temporal_interval","reconstruct_trajectory",

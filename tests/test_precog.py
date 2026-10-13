@@ -67,14 +67,14 @@ def test_relation_endpoints_are_valid() -> None:
     assert len(store.relations()) == 1
 
 
-def test_consolidation_requires_validation_before_active() -> None:
+def test_consolidation_requires_explicit_review_before_active() -> None:
     store = InMemoryStore()
     store.append_experience(experience("e1", outcome="ok"))
     store.append_experience(experience("e2", outcome="ok"))
     proposal = Consolidator(store).propose(store.experiences("t1"))
     assert Consolidator(store).validate(proposal)
     memory = Consolidator(store).materialize_memory(proposal, now=NOW)
-    assert memory.lifecycle is MemoryLifecycle.ACTIVE
+    assert memory.lifecycle is MemoryLifecycle.CANDIDATE
 
 
 def test_contradiction_stays_candidate() -> None:
