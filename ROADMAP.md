@@ -45,4 +45,7 @@ Record candidate/baseline identity, provenance, cohort, metrics, guardrail failu
 ## Phase 14 — Durable Promotion Audit
 Persist audit records in PostgreSQL, enforce idempotent replay and reject row mutation/truncation through database triggers. Apply the migration separately and use least-privilege database roles.
 
+## Phase 15 — Audit Integrity Verification
+Hash-chain newly appended audit events, serialize concurrent appends, verify event content/links/head, and report legacy records that predate integrity hashing. Export or sign head checkpoints outside the database for stronger tamper evidence.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.

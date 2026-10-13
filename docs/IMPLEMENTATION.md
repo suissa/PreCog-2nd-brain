@@ -17,6 +17,7 @@
 | 12 Outcome-Gated Promotion | continual.py, same-cohort comparison, non-regression guardrails and report-aware rollback | Implemented baseline |
 | 13 Promotion Audit Trail | promotion_audit.py, immutable decision records, append-only log and idempotent replay | Implemented baseline |
 | 14 Durable Promotion Audit | postgres_promotion_audit.py, migration 002, idempotent PostgreSQL inserts and mutation-blocking triggers | Implemented baseline |
+| 15 Audit Integrity Verification | audit_integrity.py, migration 003, serialized SHA-256 chain and read-only integrity report | Implemented baseline |
 
 ## Source-of-truth boundary
 
@@ -60,9 +61,17 @@ The migration adds checks for metric ranges and evidence arrays, plus database t
 
 Audit capture is separate from promotion and deployment. It cannot authorize runtime actions, mutate canonical Experience, or imply that a candidate was deployed. The migration and the PostgreSQL adapter must both be deployed before this sink can provide durable audit storage.
 
+## Audit integrity chain
+
+Apply `sql/003_promotion_audit_integrity.sql` after migration 002. Every new event is hashed from a canonical serialization of all decision fields plus the preceding SHA-256 digest. A singleton chain-head row is locked inside the append transaction so concurrent writers cannot fork the chain; the event insert and head update commit atomically. `verify_integrity()` recomputes hashes, checks previous-hash links and compares the verified tail with the persisted head.
+
+Rows created before migration 003 are explicitly reported as `legacy_unhashed_events`; they are not retroactively treated as verified. A report can be valid for the newly chained segment while still identifying legacy rows. The chain detects content changes, removed or reordered chained rows, and inconsistent heads when an attacker cannot rewrite all chain evidence. Because the head is stored in the same database, a database owner who can rewrite rows and the head can forge a replacement chain. For stronger tamper evidence, periodically export or sign the head hash into an independently controlled system (for example, immutable object storage or a separately administered transparency service).
+
+Verification is read-only and is not a promotion/deployment signal. Promotion decisions never imply deployment or runtime authorization.
+
 ## Production boundary
 
-The Python implementation is the executable reference and deterministic contract harness. PostgreSQL is the canonical v1 production substrate; `sql/001_initial.sql` defines the initial storage topology and `sql/002_promotion_audit.sql` adds the promotion audit table. Provider-specific model, embedding and reranking integrations remain adapters.
+The Python implementation is the executable reference and deterministic contract harness. PostgreSQL is the canonical v1 production substrate; `sql/001_initial.sql` defines the initial storage topology, `sql/002_promotion_audit.sql` adds the promotion audit table, and `sql/003_promotion_audit_integrity.sql` adds the integrity chain. Provider-specific model, embedding and reranking integrations remain adapters.
 
 ## Phase guarantees
 
