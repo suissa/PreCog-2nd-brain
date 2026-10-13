@@ -45,4 +45,13 @@ Record candidate/baseline identity, provenance, cohort, metrics, guardrail failu
 ## Phase 14 — Durable Promotion Audit
 Persist audit records in PostgreSQL, enforce idempotent replay and reject row mutation/truncation through database triggers. Apply the migration separately and use least-privilege database roles.
 
+## Phase 15 — Audit Integrity Verification
+Hash-chain newly appended audit events, serialize concurrent appends, verify event content/links/head, and report legacy records that predate integrity hashing. Export or sign head checkpoints outside the database for stronger tamper evidence.
+
+## Phase 16 — External Audit Checkpoints and Reconciliation
+Sign verified audit-chain heads with Ed25519, export portable JSON checkpoints, and reconcile a database's current history against an independently stored checkpoint. Detect invalid signatures, rollback/truncation, rewritten history, and invalid local chains. The checkpoint must be stored outside the database trust boundary; key custody and external storage remain deployment responsibilities.
+
+## Phase 17 — Automated Checkpoint Operations
+Provide a one-shot job suitable for cron/systemd, an atomic no-overwrite filesystem checkpoint store, trusted public-key lookup by key ID, pre/post chain verification, and alert-sink abstraction. Reconciliation must fail closed for missing checkpoints, unknown keys, invalid signatures or divergent history. The filesystem adapter is a reference integration, not inherently independent from a database hosted on the same machine; production should use separately administered or immutable storage. Key rotation retains old public keys for historical checkpoint verification.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
