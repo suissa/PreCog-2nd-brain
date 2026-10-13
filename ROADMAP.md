@@ -40,6 +40,9 @@ Evaluate observed behavior accuracy, successful-outcome rate, confidence calibra
 Compare candidate and champion on the same Experience cohort; enforce quality gain and non-regression guardrails; preserve report-aware rollback.
 
 ## Phase 13 — Promotion Audit Trail
-Record candidate/baseline identity, provenance, cohort, metrics, guardrail failures, decision and timestamp in an append-only audit sink. The reference in-memory sink is not production persistence.
+Record candidate/baseline identity, provenance, cohort, metrics, guardrail failures, decision and timestamp in an append-only audit sink.
+
+## Phase 14 — Durable Promotion Audit
+Persist audit records in PostgreSQL, enforce idempotent replay and reject row mutation/truncation through database triggers. Apply the migration separately and use least-privilege database roles.
 
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
