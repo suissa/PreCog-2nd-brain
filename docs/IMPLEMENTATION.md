@@ -9,13 +9,22 @@
 | 4 Temporal Relations | relations.py, typed temporal relation graph projection | Implemented |
 | 5 Consolidation | consolidation.py, proposal, contradiction detection and validation gate | Implemented |
 | 6 Dreaming | dreaming.py, stale detection, deduplication and archival | Implemented |
-| 7 PreCog | prediction.py, ranker.py, next_action.py, BehaviorID prediction and BestNextAction | Implemented baseline |
+| 7 PreCog | prediction.py, ranker.py, next_action.py, behavior prediction and BestNextAction | Implemented baseline |
 | 8 Capability Evolution | capability.py, evolution.py, Manager/Healer/Judge gate | Implemented baseline |
 | 9 Continual Learning | evaluation.py, continual.py, offline evaluation and champion/challenger rollback | Implemented baseline |
+| 10 Execution Feedback | feedback.py, runtime outcome capture as append-only Experience | Implemented baseline |
 
 ## Source-of-truth boundary
 
 Experience is append-only and authoritative. Memory, knowledge, relations, indexes, projections and model candidates are derived state and therefore rebuildable or replaceable.
+
+## Retrieval-to-feedback loop
+
+`Experience -> Memory -> Retrieval -> Prediction -> BestNextAction -> Runtime execution -> ExecutionResult -> Experience`
+
+`ExecutionFeedbackRecorder` accepts an outcome reported by the authoritative runtime and persists it as a new Experience. An explicit runtime `event_id` provides a stable idempotency key; replaying the same event does not duplicate the Experience, and reusing the key with conflicting content is rejected. The event's Behavior, action, outcome, trajectory, timestamps and provenance remain queryable.
+
+The recorder does not execute or authorize actions, and a prediction is never evidence that an action succeeded. Only the runtime's reported result is captured. If a runtime has no upstream trace or memory identifiers, the external event ID is retained as provenance.
 
 ## Production boundary
 
@@ -23,6 +32,6 @@ The Python implementation is the executable reference and deterministic contract
 
 ## Phase guarantees
 
-Each phase has an explicit invariant surface. Later cognitive phases do not participate in correctness of earlier phases. Prediction never authorizes execution; capability evolution never bypasses validation; dreaming never mutates experience; retrieval never treats embeddings as canonical truth.
+Each phase has an explicit invariant surface. Later cognitive phases do not participate in correctness of earlier phases. Prediction never authorizes execution; capability evolution never bypasses validation; dreaming never mutates experience; retrieval never treats embeddings as canonical truth. Execution feedback records runtime outcomes without granting authority to prediction or action selection.
 
 The normative specification remains PRE-CORD.md; the roadmap remains ROADMAP.md.
