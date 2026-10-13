@@ -81,3 +81,44 @@ def test_checkpoint_rejects_invalid_current_chain_and_tampered_signature():
     )
     assert not result.valid
     assert not result.chain_valid
+
+
+
+def test_checkpoint_refuses_invalid_chain():
+    import pytest
+
+    private = Ed25519PrivateKey.generate()
+    with pytest.raises(ValueError, match="invalid audit chain"):
+        create_checkpoint(
+            report(valid=False), sequence=14, private_key=private,
+            public_key_id="audit-key", created_at=NOW,
+        )
+
+
+def test_checkpoint_detects_local_history_rollback():
+    private = Ed25519PrivateKey.generate()
+    checkpoint = create_checkpoint(
+        report(), sequence=14, private_key=private,
+        public_key_id="audit-key", created_at=NOW,
+    )
+    result = reconcile_checkpoint(
+        checkpoint, public_key=private.public_key(), current_report=report(),
+        current_sequence=10, observed_hash_at_checkpoint=None,
+    )
+    assert not result.valid
+    assert any("shorter" in error for error in result.errors)
+
+
+def test_checkpoint_detects_invalid_signature_even_when_chain_matches():
+    private = Ed25519PrivateKey.generate()
+    other = Ed25519PrivateKey.generate()
+    checkpoint = create_checkpoint(
+        report(), sequence=14, private_key=private,
+        public_key_id="audit-key", created_at=NOW,
+    )
+    result = reconcile_checkpoint(
+        checkpoint, public_key=other.public_key(), current_report=report(),
+        current_sequence=14, observed_hash_at_checkpoint=checkpoint.head_hash,
+    )
+    assert not result.valid
+    assert not result.signature_valid

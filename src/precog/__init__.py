@@ -6,7 +6,10 @@ from .store import InMemoryStore
 from .postgres import PostgresStore
 from .postgres_promotion_audit import PostgresPromotionAuditLog
 from .audit_integrity import PromotionAuditIntegrityReport, calculate_event_hash
-from .audit_checkpoint import PromotionAuditCheckpoint, PromotionAuditReconciliation, create_checkpoint, reconcile_checkpoint, verify_checkpoint_signature
+from .audit_checkpoint import (
+    PromotionAuditCheckpoint, PromotionAuditReconciliation, create_checkpoint,
+    reconcile_checkpoint, verify_checkpoint_signature,
+)
 from .retrieval import HybridRetriever
 from .retrieval_repository import RetrievalRepository, InMemoryRetrievalRepository, PostgresRetrievalRepository
 from .consolidation import Consolidator, ConsolidationProposal
