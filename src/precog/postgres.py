@@ -6,14 +6,15 @@ from datetime import datetime, timezone
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from .embeddings import EmbeddingRecord
-
 from .models import (
     Experience, Knowledge, Memory, MemoryLifecycle, MemoryType,
     Provenance, Relation, RelationType, Trajectory,
 )
 
+from .models import (
+    Experience, Knowledge, Memory, MemoryLifecycle, MemoryType,
+    Provenance, Relation, RelationType, Trajectory,
+)
 
 class PostgresStore:
     """PostgreSQL persistence adapter for canonical and derived PreCog state."""
@@ -22,32 +23,28 @@ class PostgresStore:
         self._connection = connection
 
     def append_experience(self, experience: Experience) -> bool:
-        try:
-            with self._connection.cursor() as cursor:
-                cursor.execute(
-                    """INSERT INTO experience (
-                        experience_id, trajectory_id, occurred_at, recorded_at,
-                        actor, event_type, payload, provenance, intent_id,
-                        behavior_id, action, outcome, schema_version
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s)
-                    ON CONFLICT (experience_id) DO NOTHING RETURNING experience_id""",
-                    (experience.id, experience.trajectory_id, experience.occurred_at,
-                     self._recorded_at_sql(), experience.actor, experience.event_type,
-                     self._json(experience.payload), self._json(experience.provenance),
-                     experience.intent_id, experience.behavior_id, experience.action,
-                     experience.outcome, experience.schema_version),
-                )
-                inserted = cursor.fetchone()
-            if inserted is not None:
-                self._connection.commit()
-                return True
-            existing = self.get_experience(experience.id)
-            if existing is None or existing != replace(experience, recorded_at=existing.recorded_at):
-                raise ValueError("experience id already exists with different content")
-            return False
-        except Exception:
-            self._connection.rollback()
-            raise
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO experience (
+                    experience_id, trajectory_id, occurred_at, recorded_at,
+                    actor, event_type, payload, provenance, intent_id,
+                    behavior_id, action, outcome, schema_version
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s)
+                ON CONFLICT (experience_id) DO NOTHING RETURNING experience_id""",
+                (experience.id, experience.trajectory_id, experience.occurred_at,
+                 experience.recorded_at, experience.actor, experience.event_type,
+                 self._json(experience.payload), self._json(experience.provenance),
+                 experience.intent_id, experience.behavior_id, experience.action,
+                 experience.outcome, experience.schema_version),
+            )
+            inserted = cursor.fetchone()
+        if inserted is not None:
+            self._connection.commit()
+            return True
+        existing = self.get_experience(experience.id)
+        if existing != experience:
+            raise ValueError("experience id already exists with different content")
+        return False
 
     def get_experience(self, experience_id: str) -> Experience | None:
         with self._connection.cursor() as cursor:
@@ -107,8 +104,8 @@ class PostgresStore:
             cursor.execute(
                 """INSERT INTO memory
                     (memory_id,memory_type,content,source_ids,created_at,valid_from,valid_to,
-                     confidence,salience,lifecycle,provenance,metadata,schema_version,version)
-                    VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s)
+                     confidence,salience,lifecycle,provenance,metadata,schema_version)
+                    VALUES (%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s)
                     ON CONFLICT (memory_id) DO UPDATE SET
                     memory_type=EXCLUDED.memory_type, content=EXCLUDED.content,
                     source_ids=EXCLUDED.source_ids, created_at=EXCLUDED.created_at,
@@ -119,8 +116,7 @@ class PostgresStore:
                 (memory.id, memory.memory_type.value, memory.content,
                  self._json(memory.source_ids), memory.created_at, memory.valid_from,
                  memory.valid_to, memory.confidence, memory.salience, memory.lifecycle.value,
-                 self._json(memory.provenance), self._json(memory.metadata), memory.schema_version,
-                 memory.version),
+                 self._json(memory.provenance), self._json(memory.metadata), memory.schema_version),
             )
         self._connection.commit()
 
@@ -137,136 +133,6 @@ class PostgresStore:
             cursor.execute(query, params)
             rows = cursor.fetchall()
         return tuple(self._memory_from_row(r) for r in rows)
-
-    def lexical_search(
-        self,
-        query: str,
-        *,
-        at: datetime | None = None,
-        tenant_id: str | None = None,
-        actor: str | None = None,
-        lifecycle: Sequence[str] | None = None,
-        limit: int = 10,
-    ) -> tuple[dict[str, Any], ...]:
-        """Run deterministic PostgreSQL full-text retrieval over canonical memory."""
-        if not query.strip() or limit <= 0:
-            return ()
-        clauses = ["m.lifecycle <> %s", "(to_tsvector('simple', m.content) @@ websearch_to_tsquery('simple', %s) OR m.memory_id ILIKE %s OR m.content ILIKE %s)"]
-        params: list[Any] = [MemoryLifecycle.ARCHIVED.value, query, f"%{query}%", f"%{query}%"]
-        if at is not None:
-            clauses.append("(m.valid_from IS NULL OR m.valid_from <= %s)")
-            clauses.append("(m.valid_to IS NULL OR m.valid_to > %s)")
-            params.extend((at, at))
-        if tenant_id is not None:
-            clauses.append("m.metadata ->> 'tenant_id' = %s")
-            params.append(tenant_id)
-        if actor is not None:
-            clauses.append("m.metadata ->> 'actor' = %s")
-            params.append(actor)
-        if lifecycle:
-            placeholders = ",".join(["%s"] * len(lifecycle))
-            clauses.append(f"m.lifecycle IN ({placeholders})")
-            params.extend(lifecycle)
-        params.append(limit)
-        sql = f"""
-            SELECT m.memory_id,
-                   ts_rank_cd(to_tsvector('simple', m.content),
-                              websearch_to_tsquery('simple', %s)) AS score,
-                   m.provenance, m.lifecycle
-            FROM memory m
-            WHERE {" AND ".join(clauses)}
-            ORDER BY score DESC, m.memory_id ASC
-            LIMIT %s
-        """
-        params_for_rank = [query, *params]
-        with self._connection.cursor() as cursor:
-            cursor.execute(sql, tuple(params_for_rank))
-            rows = cursor.fetchall()
-        return tuple({
-            "object_id": row[0],
-            "score": float(row[1]),
-            "provenance": self._provenance(row[2]),
-            "lifecycle": MemoryLifecycle(row[3]),
-            "source_type": "memory",
-        } for row in rows)
-
-    def put_embedding(self, embedding: "EmbeddingRecord") -> None:
-        """Persist only a derived vector projection; canonical memory is untouched."""
-        from .embeddings import EmbeddingRecord
-        if not isinstance(embedding, EmbeddingRecord):
-            raise TypeError("embedding must be an EmbeddingRecord")
-        with self._connection.cursor() as cursor:
-            cursor.execute(
-                """INSERT INTO memory_embedding
-                    (memory_id, model, provider_version, dimensions, source_version,
-                     source_hash, embedding)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s::vector)
-                    ON CONFLICT (memory_id) DO UPDATE SET
-                    model=EXCLUDED.model, provider_version=EXCLUDED.provider_version,
-                    dimensions=EXCLUDED.dimensions, source_version=EXCLUDED.source_version,
-                    source_hash=EXCLUDED.source_hash, embedding=EXCLUDED.embedding""",
-                (embedding.memory_id, embedding.model, embedding.provider_version,
-                 embedding.dimensions, embedding.source_version, embedding.source_hash,
-                 "[" + ",".join(str(v) for v in embedding.vector) + "]"),
-            )
-        self._connection.commit()
-
-    def embedding(self, memory_id: str) -> "EmbeddingRecord | None":
-        from .embeddings import EmbeddingRecord
-        with self._connection.cursor() as cursor:
-            cursor.execute(
-                """SELECT memory_id, embedding, model, provider_version, dimensions,
-                    source_version, source_hash
-                    FROM memory_embedding WHERE memory_id = %s""",
-                (memory_id,),
-            )
-            row = cursor.fetchone()
-        if row is None:
-            return None
-        vector = tuple(float(v) for v in row[1])
-        return EmbeddingRecord(
-            row[0], vector, row[2], row[3], row[4], row[5], row[6],
-        )
-
-    def semantic_search(
-        self,
-        query_vector: Sequence[float],
-        *,
-        model: str,
-        provider_version: str,
-        dimensions: int,
-        limit: int = 10,
-    ) -> tuple[dict[str, Any], ...]:
-        """Deterministic pgvector cosine retrieval over current derived vectors."""
-        if not query_vector or dimensions < 1 or len(query_vector) != dimensions or limit <= 0:
-            return ()
-        vector = "[" + ",".join(str(float(v)) for v in query_vector) + "]"
-        with self._connection.cursor() as cursor:
-            cursor.execute(
-                """SELECT e.memory_id, 1 - (e.embedding <=> %s::vector) AS score,
-                    m.provenance, m.lifecycle, e.source_version, m.version
-                    FROM memory_embedding e
-                    JOIN memory m ON m.memory_id = e.memory_id
-                    WHERE m.lifecycle <> %s
-                      AND e.model = %s
-                      AND e.provider_version = %s
-                      AND e.dimensions = %s
-                      AND e.source_version = m.version
-                    ORDER BY score DESC, e.memory_id ASC
-                    LIMIT %s""",
-                (vector, MemoryLifecycle.ARCHIVED.value, model,
-                 provider_version, dimensions, limit),
-            )
-            rows = cursor.fetchall()
-        return tuple({
-            "object_id": row[0],
-            "score": max(0.0, min(1.0, float(row[1]))),
-            "provenance": self._provenance(row[2]),
-            "lifecycle": MemoryLifecycle(row[3]),
-            "source_type": "memory",
-            "source_version": row[4],
-        } for row in rows)
-
 
     def put_knowledge(self, knowledge: Knowledge) -> None:
         self._require_sources(knowledge.evidence_ids)
@@ -355,9 +221,45 @@ class PostgresStore:
         if set(ids) - found:
             raise ValueError("provenance references unknown source")
 
-    @staticmethod
-    def _recorded_at_sql() -> Any:
-        return datetime.now(timezone.utc)
+    def search_memory_candidates(
+        self, query: str, *, now: Any, limit: int = 10,
+    ) -> tuple[tuple[str, float, float, float, float], ...]:
+        """Run the database-native lexical/temporal retrieval projection.
+
+        Returns (memory_id, lexical, temporal, relation, score). Semantic/vector
+        reranking remains an optional provider adapter and never becomes canonical.
+        """
+        limit = max(0, limit)
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """WITH candidates AS (
+                    SELECT m.memory_id,
+                           ts_rank(to_tsvector('simple', m.content),
+                                   plainto_tsquery('simple', %s)) AS lexical_score,
+                           CASE
+                               WHEN m.valid_from IS NOT NULL AND %s < m.valid_from THEN 0.0
+                               WHEN m.valid_to IS NOT NULL AND %s > m.valid_to THEN 0.0
+                               WHEN m.valid_from IS NULL AND m.valid_to IS NULL THEN 0.5
+                               ELSE 1.0
+                           END AS temporal_score,
+                           COALESCE((SELECT MAX(r.confidence)
+                                     FROM relation r
+                                     WHERE r.target_id = m.memory_id
+                                        OR r.source_id = m.memory_id), 0.0) AS relation_score
+                    FROM memory m
+                    WHERE m.lifecycle <> 'archived'
+                )
+                SELECT memory_id, lexical_score, temporal_score, relation_score,
+                       LEAST(1.0, 0.45 * LEAST(1.0, lexical_score) +
+                                   0.15 * temporal_score + 0.10 * relation_score) AS score
+                FROM candidates
+                WHERE lexical_score > 0 OR temporal_score > 0 OR relation_score > 0
+                ORDER BY score DESC, memory_id
+                LIMIT %s""",
+                (query, now, now, limit),
+            )
+            rows = cursor.fetchall()
+        return tuple((r[0], float(r[1]), float(r[2]), float(r[3]), float(r[4])) for r in rows)
 
     @staticmethod
     def _json(value: Any) -> str:
@@ -381,7 +283,7 @@ class PostgresStore:
     def _memory_from_row(cls, row: Sequence[Any]) -> Memory:
         return Memory(row[0], MemoryType(row[1]), row[2], tuple(cls._decode(row[3])),
                       row[4], row[5], row[6], row[7], row[8], MemoryLifecycle(row[9]),
-                      cls._provenance(row[10]), row[12], row[13], cls._decode(row[11]))
+                      cls._provenance(row[10]), row[12], cls._decode(row[11]))
 
     @classmethod
     def _knowledge_from_row(cls, row: Sequence[Any]) -> Knowledge:
