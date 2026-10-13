@@ -134,6 +134,11 @@ class HybridRetriever:
 
         if self.store is None:
             raise TypeError("candidate-based compatibility search requires InMemoryStore")
+        if lexical_candidates is None and semantic_candidates is None and metadata_scores is None:
+            lexical_candidates = LexicalRetriever(self.store).search(
+                query, at=now, limit=limit, tenant_id=tenant_id, actor=actor,
+                lifecycle=lifecycle,
+            )
         memories = {memory.id: memory for memory in self.store.memories()}
         lexical_by_id = {item.object_id: item for item in (lexical_candidates or ())}
         semantic_by_id = {item.object_id: item for item in (semantic_candidates or ())}
