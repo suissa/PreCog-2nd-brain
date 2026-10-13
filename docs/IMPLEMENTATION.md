@@ -20,6 +20,7 @@
 | 15 Audit Integrity Verification | audit_integrity.py, migration 003, serialized SHA-256 chain and read-only integrity report | Implemented baseline |
 | 16 External Audit Checkpoints | audit_checkpoint.py, Ed25519-signed JSON checkpoint export and history reconciliation | Implemented baseline |
 | 17 Automated Checkpoint Operations | audit_checkpoint_ops.py, one-shot CLI, atomic filesystem store, public-key registry and alert sink | Implemented baseline |
+| 18 Independent Cloud Publication | S3CheckpointStore, create-only writes, OIDC-enabled scheduled GitHub Actions workflow | Implemented baseline; AWS configuration required |
 
 ## Source-of-truth boundary
 
@@ -99,3 +100,19 @@ The Python implementation is the executable reference and deterministic contract
 ## Phase guarantees
 
 Each phase has an explicit invariant surface. Later cognitive phases do not participate in correctness of earlier phases. Prediction never authorizes execution; capability evolution never bypasses validation; dreaming never mutates experience; retrieval never treats embeddings as canonical truth. Execution feedback records runtime outcomes without granting authority to prediction or action selection.
+
+
+## Phase 18 — S3 checkpoint publication
+
+The existing `CheckpointJob` now supports both the atomic filesystem store and `S3CheckpointStore`. The S3 adapter implements the same `CheckpointStore` contract, uses conditional create-only writes (`IfNoneMatch="*"`), records sequence/hash/key ID as object metadata, and retrieves the latest checkpoint across paginated listings. It does not overwrite a checkpoint or maintain a mutable “latest” pointer. The optional `s3` extra installs boto3; the `postgres` extra installs psycopg.
+
+The workflow `.github/workflows/audit-checkpoint-publication.yml` runs daily at 03:17 UTC and supports manual dispatch. Required configuration:
+- Secret `DATABASE_URL` or `PRECOG_DATABASE_URL` with a least-privilege database account.
+- Secret `PRECOG_PRIVATE_KEY_FILE` is not stored directly; provide the PEM through `PRECOG_AUDIT_PRIVATE_KEY_PEM`, which the workflow writes to a runner-temporary file with mode 0600.
+- Secret `PRECOG_AWS_ROLE_ARN` for a role trusted by GitHub Actions OIDC.
+- Variables `PRECOG_PUBLIC_KEY_ID`, `PRECOG_AUDIT_S3_BUCKET`, and optionally `PRECOG_AUDIT_S3_PREFIX` and `PRECOG_AWS_REGION`.
+- Commit the active public key as `keys/audit/<key-id>.pem`. Retain previous public keys in this directory so historical checkpoints remain verifiable.
+
+Restrict the publication OIDC role to this repository and workflow and grant only `s3:PutObject` on the checkpoint prefix; do not grant deletion. A separate verification role needs `s3:ListBucket` scoped to the prefix and `s3:GetObject` on checkpoint objects. Administer the bucket separately from PostgreSQL, enable versioning and consider Object Lock for immutable retention. The workflow does not provision AWS resources or change IAM policies.
+
+For key rotation, create a new Ed25519 pair in an approved secret manager, commit the public key under its new key ID, update the private-key secret and key-ID variable together, run a manual checkpoint and verify it, then retire the old private key while retaining the old public key. Direct KMS/HSM signing is not implemented; it requires a dedicated signer adapter rather than exporting the private key as PEM. Unknown key IDs fail closed. Checkpoint publication and verification are evidence only; they do not authorize promotion, deployment or execution.
