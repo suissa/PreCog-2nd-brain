@@ -108,8 +108,8 @@ class S3CheckpointStore:
     def __init__(self, client: Any, bucket: str, prefix: str = "precog/promotion-audit/checkpoints") -> None:
         if not bucket.strip():
             raise ValueError("S3 bucket must be non-empty")
-        normalized = prefix.strip("/")
-        if not normalized.strip():
+        normalized = prefix.strip().strip("/")
+        if not normalized:
             raise ValueError("S3 prefix must be non-empty")
         self.client = client
         self.bucket = bucket
@@ -124,7 +124,7 @@ class S3CheckpointStore:
         self.client.put_object(
             Bucket=self.bucket,
             Key=key,
-            Body=(checkpoint.to_json() + "\\n").encode("utf-8"),
+            Body=checkpoint.to_json().encode("utf-8"),
             ContentType="application/json",
             Metadata={
                 "checkpoint-sequence": str(checkpoint.sequence),
