@@ -5,6 +5,7 @@ from .models import Behavior, Experience, Knowledge, Memory, MemoryLifecycle, Me
 from .store import InMemoryStore
 from .postgres import PostgresStore
 from .postgres_promotion_audit import PostgresPromotionAuditLog
+from .audit_integrity import PromotionAuditIntegrityReport, calculate_event_hash
 from .retrieval import HybridRetriever
 from .retrieval_repository import RetrievalRepository, InMemoryRetrievalRepository, PostgresRetrievalRepository
 from .consolidation import Consolidator, ConsolidationProposal
@@ -37,5 +38,6 @@ __all__ = [
     "BestNextAction","BestNextActionSelector","ExecutionFeedbackRecorder","ExecutionResult","RecordedExecution","CapabilityEvolution","EvolutionDecision",
     "Manager","Healer","Judge","ChampionChallenger","ModelCandidate","PromotionDecision","OutcomePromotionDecision","outcome_quality",
     "InMemoryPromotionAuditLog","PromotionAuditEvent","PromotionAuditRecorder","PromotionAuditWriter",
+    "PromotionAuditIntegrityReport","calculate_event_hash",
     "MarkdownProjection","MarkdownProjector","ProjectionError","project_knowledge","project_memory",
 ]
