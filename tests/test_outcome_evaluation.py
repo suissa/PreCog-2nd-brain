@@ -1,3 +1,5 @@
+import pytest
+
 from precog.outcome_evaluation import OutcomeEvaluator, PredictionObservation
 
 
@@ -27,7 +29,7 @@ def test_evaluation_passes_only_when_all_quality_gates_pass() -> None:
     assert report.sample_count == 25
     assert report.behavior_accuracy == 1.0
     assert report.successful_outcome_rate == 1.0
-    assert report.brier_score == 0.01
+    assert report.brier_score == pytest.approx(0.01)
     assert report.evidence_coverage == 1.0
     assert len(report.evaluated_experience_ids) == 25
 
