@@ -1,6 +1,9 @@
 -- Phase 15: tamper-evident hash chain for newly appended promotion audit events.
 -- Existing rows remain explicitly marked as legacy/unhashed; they are not retroactively
 -- represented as cryptographically verified evidence.
+DROP TRIGGER IF EXISTS promotion_audit_no_row_mutation ON promotion_audit;
+DROP TRIGGER IF EXISTS promotion_audit_no_truncate ON promotion_audit;
+
 CREATE SEQUENCE IF NOT EXISTS promotion_audit_sequence;
 ALTER TABLE promotion_audit
     ADD COLUMN IF NOT EXISTS audit_sequence BIGINT,
@@ -8,7 +11,9 @@ ALTER TABLE promotion_audit
     ADD COLUMN IF NOT EXISTS event_hash TEXT;
 
 WITH numbered AS (
-    SELECT event_id, row_number() OVER (ORDER BY recorded_at, event_id) AS seq
+    SELECT event_id,
+           COALESCE((SELECT MAX(audit_sequence) FROM promotion_audit), 0)
+             + row_number() OVER (ORDER BY recorded_at, event_id) AS seq
     FROM promotion_audit
     WHERE audit_sequence IS NULL
 )
@@ -38,5 +43,9 @@ INSERT INTO promotion_audit_chain_state (singleton, last_hash)
 VALUES (TRUE, repeat('0', 64))
 ON CONFLICT (singleton) DO NOTHING;
 
--- Migration backfill must be allowed to populate audit_sequence, but audit evidence
--- remains otherwise immutable. Reinstall append-only triggers after adding the columns.
+CREATE TRIGGER promotion_audit_no_row_mutation
+    BEFORE UPDATE OR DELETE ON promotion_audit
+    FOR EACH ROW EXECUTE FUNCTION reject_promotion_audit_mutation();
+CREATE TRIGGER promotion_audit_no_truncate
+    BEFORE TRUNCATE ON promotion_audit
+    FOR EACH STATEMENT EXECUTE FUNCTION reject_promotion_audit_mutation();
