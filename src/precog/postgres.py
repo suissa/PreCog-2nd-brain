@@ -283,7 +283,7 @@ class PostgresStore:
     def _memory_from_row(cls, row: Sequence[Any]) -> Memory:
         return Memory(row[0], MemoryType(row[1]), row[2], tuple(cls._decode(row[3])),
                       row[4], row[5], row[6], row[7], row[8], MemoryLifecycle(row[9]),
-                      cls._provenance(row[10]), row[12], cls._decode(row[11]))
+                      cls._provenance(row[10]), row[12], 1, cls._decode(row[11]))
 
     @classmethod
     def _knowledge_from_row(cls, row: Sequence[Any]) -> Knowledge:
