@@ -4,7 +4,6 @@ import math
 import re
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import replace
 from datetime import datetime
 
 from .embeddings import EmbeddingProvider
@@ -12,7 +11,7 @@ from .models import Memory, MemoryLifecycle, RetrievalEvidence
 from .retrieval_repository import RetrievalRepository
 from .store import InMemoryStore
 
-_TOKEN = re.compile(r"[\\w-]+", re.UNICODE)
+_TOKEN = re.compile(r"[\w-]+", re.UNICODE)
 
 
 def _tokens(text: str) -> Counter[str]:
