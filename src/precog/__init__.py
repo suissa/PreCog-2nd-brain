@@ -1,4 +1,4 @@
-""""PreCog persistent cognitive substrate reference implementation."""
+"""PreCog persistent cognitive substrate reference implementation."""
 from .models import Behavior, Experience, Knowledge, Memory, MemoryLifecycle, MemoryType, Relation, RelationType, RetrievalEvidence, Trajectory
 from .store import InMemoryStore
 from .postgres import PostgresStore
