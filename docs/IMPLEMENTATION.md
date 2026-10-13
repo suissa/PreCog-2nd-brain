@@ -13,7 +13,7 @@
 | 8 Capability Evolution | capability.py, evolution.py, Manager/Healer/Judge gate | Implemented baseline |
 | 9 Continual Learning | evaluation.py, continual.py, offline evaluation and champion/challenger rollback | Implemented baseline |
 | 10 Execution Feedback | feedback.py, runtime outcome capture as append-only Experience | Implemented baseline |
-| 11 Outcome Evaluation | outcome_evaluation.py, prediction accuracy, outcome rate, Brier score and evidence coverage | Implemented baseline |
+| 11 Outcome Evaluation | outcome_evaluation.py, prediction accuracy, outcome rate, Brier score and evidence coverage | Implemented baseline |\n| 12 Outcome-Gated Promotion | continual.py, same-cohort comparison, non-regression guardrails and report-aware rollback | Implemented baseline |
 
 ## Source-of-truth boundary
 
@@ -32,6 +32,16 @@ The recorder does not execute or authorize actions, and a prediction is never ev
 `OutcomeEvaluator` compares a captured prediction with the later observed Behavior and runtime outcome. It reports behavior accuracy, successful-outcome rate, mean confidence, Brier score, evidence coverage and the IDs of the experiences evaluated. Minimum sample size and quality thresholds are configurable; an empty or underpowered sample cannot pass the default gate.
 
 A passing report is evidence for a separate promotion decision, not an instruction to deploy. Evaluation does not mutate experiences, promote models, or authorize runtime actions. Prediction confidence is evaluated against whether the predicted Behavior matches the observed Behavior; outcome success is measured separately.
+
+## Outcome-gated Champion–Challenger
+
+`ChampionChallenger.evaluate_outcomes` connects offline outcome evaluation to model-candidate promotion. A candidate must have provenance and a passing `OutcomeEvaluationReport`. When a champion already exists, promotion also requires a baseline report evaluated on the same sample count and the same Experience cohort; missing baselines or mismatched cohorts fail closed.
+
+The deterministic quality score is the mean of Behavior accuracy, successful-outcome rate, evidence coverage and one minus Brier score. A candidate must exceed the baseline by the configured minimum gain and must not regress beyond the configured tolerances for accuracy, successful outcomes, Brier score or evidence coverage. Defaults allow zero regression. These thresholds are explicit policy inputs, not learned or silently adjusted.
+
+Rollback restores the previous candidate and its outcome report together. The older metric-only `evaluate` method remains for compatibility, but it does not provide the outcome guarantees of `evaluate_outcomes`.
+
+This remains an offline decision record: promotion does not deploy a model, grant execution authority, or mutate canonical Experience. A production release controller must separately validate artifacts, rollout health and rollback execution.
 
 ## Production boundary
 
