@@ -112,7 +112,16 @@ def create_checkpoint(
         "public_key_id": public_key_id,
     }
     signature = base64.b64encode(key.sign(_canonical(payload))).decode("ascii")
-    return PromotionAuditCheckpoint(**payload, signature=signature)
+    return PromotionAuditCheckpoint(
+        version=CHECKPOINT_VERSION,
+        sequence=sequence,
+        head_hash=report.verified_head_hash,
+        checked_events=report.checked_events,
+        legacy_unhashed_events=report.legacy_unhashed_events,
+        created_at=payload["created_at"],
+        public_key_id=public_key_id,
+        signature=signature,
+    )
 
 
 def verify_checkpoint_signature(
