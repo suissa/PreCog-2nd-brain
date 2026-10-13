@@ -57,4 +57,8 @@ Provide a one-shot job suitable for cron/systemd, an atomic no-overwrite filesys
 ## Phase 18 — Independent Cloud Checkpoint Publication
 Extend the scheduler-neutral checkpoint job with an S3-compatible durable store, create-only writes, pagination-aware latest-checkpoint lookup, a daily/manual GitHub Actions workflow, and OIDC-based cloud credentials. Keep PostgreSQL, signing keys and checkpoint retention in distinct trust boundaries.
 
+
+## Phase 19 — Checkpoint Monitoring and Reconciliation
+Run scheduled, read-only reconciliation between PostgreSQL and independently stored S3 evidence. Validate the local hash chain, checkpoint signature and key registry, historical hash anchor, checkpoint age, and event lag. Treat normal bounded lag separately from integrity divergence; fail closed for missing/stale evidence, excessive lag, rollback, unknown keys or signature/hash mismatch. Use a separate AWS read-only role and surface failures through GitHub Actions.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
