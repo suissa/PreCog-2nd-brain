@@ -35,7 +35,7 @@ def validate_checkpoint_freshness(
         raise ValueError("checkpoint creation timestamp must include a timezone")
 
     observed_now = now or datetime.now(timezone.utc)
-    if observed_now.tzinfo is None or observed_now.utzoffset is None:
+    if observed_now.tzinfo is None or observed_now.utcoffset is None:
         raise ValueError("current time must include a timezone")
     age = observed_now.astimezone(timezone.utc) - created_at.astimezone(timezone.utc)
     if age < timedelta(0):
