@@ -51,4 +51,7 @@ Hash-chain newly appended audit events, serialize concurrent appends, verify eve
 ## Phase 16 — External Audit Checkpoints and Reconciliation
 Sign verified audit-chain heads with Ed25519, export portable JSON checkpoints, and reconcile a database's current history against an independently stored checkpoint. Detect invalid signatures, rollback/truncation, rewritten history, and invalid local chains. The checkpoint must be stored outside the database trust boundary; key custody and external storage remain deployment responsibilities.
 
+## Phase 17 — Automated Checkpoint Publication and Key Rotation
+Publish Ed25519-signed checkpoints on a schedule to a separately administered S3 bucket using create-only writes; retain historical public keys in a keyring; fail closed on invalid, unknown or revoked key IDs. Keep private signing keys in CI secrets or a managed KMS/HSM, use workload identity instead of static cloud credentials, and configure bucket versioning/Object Lock according to the threat model.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.

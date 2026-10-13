@@ -18,7 +18,7 @@
 | 13 Promotion Audit Trail | promotion_audit.py, immutable decision records, append-only log and idempotent replay | Implemented baseline |
 | 14 Durable Promotion Audit | postgres_promotion_audit.py, migration 002, idempotent PostgreSQL inserts and mutation-blocking triggers | Implemented baseline |
 | 15 Audit Integrity Verification | audit_integrity.py, migration 003, serialized SHA-256 chain and read-only integrity report | Implemented baseline |
-| 16 External Audit Checkpoints | audit_checkpoint.py, Ed25519-signed JSON checkpoint export and history reconciliation | Implemented baseline |
+| 16 External Audit Checkpoints | audit_checkpoint.py, Ed25519-signed JSON checkpoint export and history reconciliation | Implemented baseline |\n| 17 Automated Publication and Key Rotation | audit_checkpoint_store.py, audit_keyring.py, scheduled GitHub Actions publisher to S3 | Implemented baseline; deployment configuration required |
 
 ## Source-of-truth boundary
 
@@ -85,3 +85,25 @@ The Python implementation is the executable reference and deterministic contract
 Each phase has an explicit invariant surface. Later cognitive phases do not participate in correctness of earlier phases. Prediction never authorizes execution; capability evolution never bypasses validation; dreaming never mutates experience; retrieval never treats embeddings as canonical truth. Execution feedback records runtime outcomes without granting authority to prediction or action selection.
 
 The normative specification remains PRE-CORD.md; the roadmap remains ROADMAP.md.
+
+
+## Automated external checkpoint publication
+
+`scripts/publish_audit_checkpoint.py` verifies the PostgreSQL hash chain, creates an Ed25519-signed checkpoint and publishes it to S3. The optional `audit-publish` extra installs `psycopg` and `boto3`; core imports do not require either package. `S3CheckpointPublisher` uses a create-only `IfNoneMatch="*"` write and a unique object key containing sequence, head hash and checkpoint timestamp. It never updates a mutable “latest” object. A failed conditional write fails closed.
+
+The scheduled workflow is `.github/workflows/audit-checkpoint-publication.yml` (daily at 03:17 UTC) and can also be run manually. Before enabling it, configure:
+- Repository secret `PRECOG_DATABASE_URL` with a least-privilege PostgreSQL account allowed to read the audit chain.
+- Repository secret `PRECOG_AUDIT_PRIVATE_KEY_PEM` containing the Ed25519 private key in PEM form; never commit this value or upload it as an artifact.
+- Repository secret `PRECOG_AWS_ROLE_ARN` for an AWS role trusted by GitHub Actions OIDC.
+- Repository variable `PRECOG_AUDIT_KEY_ID`, a stable non-secret identifier for the current signing key.
+- Repository variable `PRECOG_AUDIT_S3_BUCKET` and optionally `PRECOG_AUDIT_S3_PREFIX` and `PRECOG_AWS_REGION`.
+
+Restrict the OIDC role to this repository/workflow and the checkpoint prefix, grant only `s3:PutObject`, and do not grant object deletion. Keep the bucket in a separate administrative/security boundary from PostgreSQL; enable versioning and consider S3 Object Lock for the required retention period. The workflow deliberately does not create AWS infrastructure or configure IAM policies.
+
+### Key rotation and verification
+
+`AuditPublicKeyring` stores public-key records with `active`, `verify_only` and `revoked` states. Exactly one key at most can be active; historical `verify_only` keys remain usable for existing checkpoint signatures. Unknown and revoked key IDs fail verification. The keyring contains public keys only.
+
+To rotate: create a new Ed25519 key pair in a managed secret store or KMS/HSM; publish and independently retain the new public key; add it to verifier keyrings; update `PRECOG_AUDIT_PRIVATE_KEY_PEM` and `PRECOG_AUDIT_KEY_ID` together; run a manual publication and verify its signature with the new public key; then retire the old private key while retaining the old public key as `verify_only`. Mark a key `revoked` only when policy says its signatures must no longer be trusted. Record the rotation out of band and restrict access to both the secret and the workflow configuration.
+
+The workflow does not automatically verify remote checkpoints against a verifier keyring, provision S3, create KMS keys, or configure Object Lock. These remain deployment controls. Publication failures surface as failed workflow runs; they must be monitored. A checkpoint is tamper-evidence only and never authorizes promotion, deployment or execution.

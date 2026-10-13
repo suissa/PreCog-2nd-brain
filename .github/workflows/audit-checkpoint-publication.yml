@@ -1,0 +1,62 @@
+name: Publish external audit checkpoint
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: precog-external-audit-checkpoint
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check required configuration
+        env:
+          DATABASE_URL: ${{ secrets.PRECOG_DATABASE_URL }}
+          PRIVATE_KEY: ${{ secrets.PRECOG_AUDIT_PRIVATE_KEY_PEM }}
+          KEY_ID: ${{ vars.PRECOG_AUDIT_KEY_ID }}
+          BUCKET: ${{ vars.PRECOG_AUDIT_S3_BUCKET }}
+          ROLE_ARN: ${{ secrets.PRECOG_AWS_ROLE_ARN }}
+        run: |
+          set -eu
+          test -n "$DATABASE_URL" || { echo "::error::Missing PRECOG_DATABASE_URL secret"; exit 1; }
+          test -n "$PRIVATE_KEY" || { echo "::error::Missing PRECOG_AUDIT_PRIVATE_KEY_PEM secret"; exit 1; }
+          test -n "$KEY_ID" || { echo "::error::Missing PRECOG_AUDIT_KEY_ID variable"; exit 1; }
+          test -n "$BUCKET" || { echo "::error::Missing PRECOG_AUDIT_S3_BUCKET variable"; exit 1; }
+          test -n "$ROLE_ARN" || { echo "::error::Missing PRECOG_AWS_ROLE_ARN secret"; exit 1; }
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.PRECOG_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.PRECOG_AWS_REGION || 'us-east-1' }}
+      - name: Install publication dependencies
+        run: python -m pip install -e ".[audit-publish]"
+      - name: Materialize signing key with restrictive permissions
+        env:
+          SIGNING_KEY_PEM: ${{ secrets.PRECOG_AUDIT_PRIVATE_KEY_PEM }}
+        run: |
+          set -eu
+          umask 077
+          printf '%s' "$SIGNING_KEY_PEM" > "$RUNNER_TEMP/precog-audit-ed25519.pem"
+          chmod 600 "$RUNNER_TEMP/precog-audit-ed25519.pem"
+      - name: Publish signed checkpoint
+        env:
+          PRECOG_DATABASE_URL: ${{ secrets.PRECOG_DATABASE_URL }}
+          PRECOG_AUDIT_PRIVATE_KEY_PATH: ${{ runner.temp }}/precog-audit-ed25519.pem
+          PRECOG_AUDIT_KEY_ID: ${{ vars.PRECOG_AUDIT_KEY_ID }}
+          PRECOG_AUDIT_S3_BUCKET: ${{ vars.PRECOG_AUDIT_S3_BUCKET }}
+          PRECOG_AUDIT_S3_PREFIX: ${{ vars.PRECOG_AUDIT_S3_PREFIX || 'precog/promotion-audit/checkpoints' }}
+          AWS_REGION: ${{ vars.PRECOG_AWS_REGION || 'us-east-1' }}
+        run: python scripts/publish_audit_checkpoint.py

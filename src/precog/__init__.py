@@ -6,6 +6,8 @@ from .store import InMemoryStore
 from .postgres import PostgresStore
 from .postgres_promotion_audit import PostgresPromotionAuditLog
 from .audit_integrity import PromotionAuditIntegrityReport, calculate_event_hash
+from .audit_checkpoint_store import CheckpointPublisher, S3CheckpointPublisher
+from .audit_keyring import AuditKeyStatus, AuditPublicKey, AuditPublicKeyring
 from .audit_checkpoint import (
     PromotionAuditCheckpoint, PromotionAuditReconciliation, create_checkpoint,
     reconcile_checkpoint, verify_checkpoint_signature,
@@ -44,5 +46,6 @@ __all__ = [
     "InMemoryPromotionAuditLog","PromotionAuditEvent","PromotionAuditRecorder","PromotionAuditWriter",
     "PromotionAuditIntegrityReport","calculate_event_hash",
     "PromotionAuditCheckpoint","PromotionAuditReconciliation","create_checkpoint","reconcile_checkpoint","verify_checkpoint_signature",
+    "CheckpointPublisher","S3CheckpointPublisher","AuditKeyStatus","AuditPublicKey","AuditPublicKeyring",
     "MarkdownProjection","MarkdownProjector","ProjectionError","project_knowledge","project_memory",
 ]
