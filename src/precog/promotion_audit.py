@@ -32,26 +32,26 @@ class PromotionAuditEvent:
     recorded_at: datetime
 
     def __post_init__(self) -> None:
-        for value, name in (
+        for text_value, name in (
             (self.id, "id"),
             (self.candidate_id, "candidate_id"),
             (self.candidate_version, "candidate_version"),
             (self.reason, "reason"),
         ):
-            if not value:
+            if not text_value:
                 raise ValueError(f"{name} must be non-empty")
         if self.recorded_at.tzinfo is None:
             raise ValueError("recorded_at must be timezone-aware")
         if self.sample_count < 0:
             raise ValueError("sample_count must be non-negative")
-        for name, value in (
+        for name, metric_value in (
             ("candidate_quality", self.candidate_quality),
             ("behavior_accuracy", self.behavior_accuracy),
             ("successful_outcome_rate", self.successful_outcome_rate),
             ("brier_score", self.brier_score),
             ("evidence_coverage", self.evidence_coverage),
         ):
-            if not 0.0 <= value <= 1.0:
+            if not 0.0 <= metric_value <= 1.0:
                 raise ValueError(f"{name} must be between 0 and 1")
         if self.baseline_quality is not None and not 0.0 <= self.baseline_quality <= 1.0:
             raise ValueError("baseline_quality must be between 0 and 1")
