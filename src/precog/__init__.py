@@ -9,6 +9,7 @@ from .dreaming import Dreamer, DreamReport
 from .prediction import BehaviorPredictor, BehaviorPrediction
 from .capability import CapabilityCandidate, CapabilityValidator
 from .evaluation import EvaluationReport, Evaluator
+from .outcome_evaluation import OutcomeEvaluator, OutcomeEvaluationReport, PredictionObservation
 from .contract import DataClass, FieldPolicy, PrivacyPolicy, validate_migration_version, validate_temporal_interval
 from .trajectory import reconstruct_trajectory, validate_experience_temporal_order
 from .relations import RelationGraph
@@ -23,7 +24,7 @@ __all__ = [
     "Relation","RelationType","RetrievalEvidence","Trajectory","InMemoryStore","PostgresStore",
     "HybridRetriever","RetrievalRepository","InMemoryRetrievalRepository","PostgresRetrievalRepository","Consolidator","ConsolidationProposal","Dreamer","DreamReport",
     "BehaviorPredictor","BehaviorPrediction","CapabilityCandidate","CapabilityValidator",
-    "EvaluationReport","Evaluator","DataClass","FieldPolicy","PrivacyPolicy",
+    "EvaluationReport","Evaluator","OutcomeEvaluator","OutcomeEvaluationReport","PredictionObservation","DataClass","FieldPolicy","PrivacyPolicy",
     "validate_migration_version","validate_temporal_interval","reconstruct_trajectory",
     "validate_experience_temporal_order","RelationGraph","BehaviorRanker","JevRankerAdapter",
     "BestNextAction","BestNextActionSelector","ExecutionFeedbackRecorder","ExecutionResult","RecordedExecution","CapabilityEvolution","EvolutionDecision",
