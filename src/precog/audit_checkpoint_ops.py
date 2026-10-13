@@ -4,7 +4,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
@@ -28,7 +28,7 @@ class AuditCheckpointLog(Protocol):
 
 
 class CheckpointStore(Protocol):
-    def write(self, checkpoint: PromotionAuditCheckpoint) -> Path: ...
+    def write(self, checkpoint: PromotionAuditCheckpoint) -> str | Path: ...
     def latest(self) -> PromotionAuditCheckpoint | None: ...
 
 
@@ -97,6 +97,74 @@ class FileCheckpointStore:
         return max(checkpoints, key=lambda item: (item.sequence, item.created_at))
 
 
+class S3CheckpointStore:
+    """S3 checkpoint store with conditional create-only writes.
+
+    Use a bucket administered separately from the PostgreSQL host/account. Enable
+    versioning and configure Object Lock when immutable retention is required.
+    The boto3 client is injected to keep cloud dependencies optional for core users.
+    """
+
+    def __init__(self, client: Any, bucket: str, prefix: str = "precog/promotion-audit/checkpoints") -> None:
+        if not bucket.strip():
+            raise ValueError("S3 bucket must be non-empty")
+        normalized = prefix.strip("/")
+        if not normalized.strip():
+            raise ValueError("S3 prefix must be non-empty")
+        self.client = client
+        self.bucket = bucket
+        self.prefix = normalized
+
+    def write(self, checkpoint: PromotionAuditCheckpoint) -> str:
+        timestamp = checkpoint.created_at.replace(":", "-")
+        key = (
+            f"{self.prefix}/checkpoint-{checkpoint.sequence:020d}-"
+            f"{checkpoint.head_hash}-{timestamp}.json"
+        )
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=(checkpoint.to_json() + "\\n").encode("utf-8"),
+            ContentType="application/json",
+            Metadata={
+                "checkpoint-sequence": str(checkpoint.sequence),
+                "checkpoint-head-hash": checkpoint.head_hash,
+                "checkpoint-key-id": checkpoint.public_key_id,
+            },
+            IfNoneMatch="*",
+        )
+        return f"s3://{self.bucket}/{key}"
+
+    def latest(self) -> PromotionAuditCheckpoint | None:
+        checkpoints: list[PromotionAuditCheckpoint] = []
+        token: str | None = None
+        while True:
+            request: dict[str, str] = {"Bucket": self.bucket, "Prefix": self.prefix + "/"}
+            if token is not None:
+                request["ContinuationToken"] = token
+            response = self.client.list_objects_v2(**request)
+            for item in response.get("Contents", []):
+                key = item.get("Key")
+                if not isinstance(key, str) or not key.endswith(".json"):
+                    continue
+                result = self.client.get_object(Bucket=self.bucket, Key=key)
+                body = result["Body"].read()
+                if isinstance(body, bytes):
+                    payload = body.decode("utf-8")
+                else:
+                    payload = str(body)
+                checkpoints.append(PromotionAuditCheckpoint.from_json(payload))
+            if not response.get("IsTruncated", False):
+                break
+            next_token = response.get("NextContinuationToken")
+            if not isinstance(next_token, str) or not next_token:
+                raise RuntimeError("S3 pagination response is missing its continuation token")
+            token = next_token
+        if not checkpoints:
+            return None
+        return max(checkpoints, key=lambda item: (item.sequence, item.created_at))
+
+
 class PublicKeyRegistry:
     """Resolve retained public keys by stable key ID; unknown IDs fail closed."""
 
@@ -131,7 +199,7 @@ class CheckpointJob:
         self.public_keys = public_keys
         self.alert_sink = alert_sink
 
-    def create(self, *, private_key: bytes, public_key_id: str) -> Path:
+    def create(self, *, private_key: bytes, public_key_id: str) -> str | Path:
         try:
             before = self.audit_log.verify_integrity()
             if not before.valid:

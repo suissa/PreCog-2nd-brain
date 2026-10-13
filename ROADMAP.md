@@ -54,4 +54,7 @@ Sign verified audit-chain heads with Ed25519, export portable JSON checkpoints, 
 ## Phase 17 — Automated Checkpoint Operations
 Provide a one-shot job suitable for cron/systemd, an atomic no-overwrite filesystem checkpoint store, trusted public-key lookup by key ID, pre/post chain verification, and alert-sink abstraction. Reconciliation must fail closed for missing checkpoints, unknown keys, invalid signatures or divergent history. The filesystem adapter is a reference integration, not inherently independent from a database hosted on the same machine; production should use separately administered or immutable storage. Key rotation retains old public keys for historical checkpoint verification.
 
+## Phase 18 — Independent Cloud Checkpoint Publication
+Extend the scheduler-neutral checkpoint job with an S3-compatible durable store, create-only writes, pagination-aware latest-checkpoint lookup, a daily/manual GitHub Actions workflow, and OIDC-based cloud credentials. Keep PostgreSQL, signing keys and checkpoint retention in distinct trust boundaries.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.

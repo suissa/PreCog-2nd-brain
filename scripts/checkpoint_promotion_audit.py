@@ -15,7 +15,11 @@ from pathlib import Path
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("create", "verify"))
+    parser.add_argument("--checkpoint-backend", choices=("file", "s3"), default=os.getenv("PRECOG_CHECKPOINT_BACKEND", "file"))
     parser.add_argument("--checkpoint-dir", default=os.getenv("PRECOG_CHECKPOINT_DIR"))
+    parser.add_argument("--s3-bucket", default=os.getenv("PRECOG_AUDIT_S3_BUCKET"))
+    parser.add_argument("--s3-prefix", default=os.getenv("PRECOG_AUDIT_S3_PREFIX", "precog/promotion-audit/checkpoints"))
+    parser.add_argument("--aws-region", default=os.getenv("AWS_REGION", "us-east-1"))
     parser.add_argument("--public-key-dir", default=os.getenv("PRECOG_PUBLIC_KEY_DIR"))
     parser.add_argument("--private-key-file", default=os.getenv("PRECOG_PRIVATE_KEY_FILE"))
     parser.add_argument("--public-key-id", default=os.getenv("PRECOG_PUBLIC_KEY_ID"))
@@ -23,10 +27,13 @@ def main() -> int:
     args = parser.parse_args()
 
     required = {
-        "checkpoint directory": args.checkpoint_dir,
         "public key directory": args.public_key_dir,
         "database URL": args.database_url,
     }
+    if args.checkpoint_backend == "file":
+        required["checkpoint directory"] = args.checkpoint_dir
+    else:
+        required["S3 bucket"] = args.s3_bucket
     if args.operation == "create":
         required["private key file"] = args.private_key_file
         required["public key ID"] = args.public_key_id
@@ -41,15 +48,29 @@ def main() -> int:
         return 2
 
     from precog.audit_checkpoint_ops import (
-        CheckpointJob, FileCheckpointStore, PublicKeyRegistry, StderrAuditAlertSink,
+        CheckpointJob, FileCheckpointStore, PublicKeyRegistry, S3CheckpointStore, StderrAuditAlertSink,
     )
     from precog.postgres_promotion_audit import PostgresPromotionAuditLog
+
+    if args.checkpoint_backend == "s3":
+        try:
+            import boto3
+        except ImportError:
+            print("Install the S3 adapter with: pip install 'boto3>=1.35'", file=sys.stderr)
+            return 2
+        store = S3CheckpointStore(
+            boto3.client("s3", region_name=args.aws_region),
+            bucket=args.s3_bucket,
+            prefix=args.s3_prefix,
+        )
+    else:
+        store = FileCheckpointStore(Path(args.checkpoint_dir))
 
     connection = psycopg.connect(args.database_url)
     try:
         job = CheckpointJob(
             audit_log=PostgresPromotionAuditLog(connection),
-            checkpoint_store=FileCheckpointStore(Path(args.checkpoint_dir)),
+            checkpoint_store=store,
             public_keys=PublicKeyRegistry(args.public_key_dir),
             alert_sink=StderrAuditAlertSink(),
         )
