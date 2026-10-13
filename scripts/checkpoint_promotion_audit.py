@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Create or reconcile external promotion-audit checkpoints.
 
-Run this command from cron/systemd. It performs one operation and exits non-zero
-on errors. Keep the private key outside the repository and database trust boundary.
+Run this command from cron/systemd or a scheduler. It performs one operation and
+exits non-zero on errors. Keep the private key outside the repository and database
+trust boundary. Verification also enforces configurable freshness/lag thresholds.
 """
 from __future__ import annotations
 
@@ -10,6 +11,8 @@ import argparse
 import os
 import sys
 from pathlib import Path
+
+from precog.audit_checkpoint_monitoring import validate_checkpoint_freshness
 
 
 def main() -> int:
@@ -24,12 +27,16 @@ def main() -> int:
     parser.add_argument("--private-key-file", default=os.getenv("PRECOG_PRIVATE_KEY_FILE"))
     parser.add_argument("--public-key-id", default=os.getenv("PRECOG_PUBLIC_KEY_ID"))
     parser.add_argument("--database-url", default=os.getenv("DATABASE_URL"))
+    parser.add_argument("--max-checkpoint-age-hours", type=float, default=float(os.getenv("PRECOG_MAX_CHECKPOINT_AGE_HOURS", "36")))
+    parser.add_argument("--max-checkpoint-lag-events", type=int, default=int(os.getenv("PRECOG_MAX_CHECKPOINT_LAG_EVENTS", "1000")))
     args = parser.parse_args()
 
-    required = {
-        "public key directory": args.public_key_dir,
-        "database URL": args.database_url,
-    }
+    if args.max_checkpoint_age_hours <= 0:
+        parser.error("--max-checkpoint-age-hours must be greater than zero")
+    if args.max_checkpoint_lag_events < 0:
+        parser.error("--max-checkpoint-lag-events must be non-negative")
+
+    required = {"public key directory": args.public_key_dir, "database URL": args.database_url}
     if args.checkpoint_backend == "file":
         required["checkpoint directory"] = args.checkpoint_dir
     else:
@@ -75,15 +82,24 @@ def main() -> int:
             alert_sink=StderrAuditAlertSink(),
         )
         if args.operation == "create":
-            key_path = Path(args.private_key_file)
-            private_key = key_path.read_bytes()
+            private_key = Path(args.private_key_file).read_bytes()
             output = job.create(private_key=private_key, public_key_id=args.public_key_id)
             print(f"Checkpoint written: {output}")
         else:
             result = job.reconcile_latest()
+            checkpoint = store.latest()
+            if checkpoint is None:
+                raise RuntimeError("no external audit checkpoint is available")
+            validate_checkpoint_freshness(
+                checkpoint,
+                current_sequence=result.current_sequence,
+                max_age_hours=args.max_checkpoint_age_hours,
+                max_lag_events=args.max_checkpoint_lag_events,
+            )
+            lag = result.current_sequence - result.checkpoint_sequence
             print(
-                f"Checkpoint valid: sequence={result.checkpoint_sequence}, "
-                f"current_sequence={result.current_sequence}, "
+                f"Checkpoint valid and fresh: sequence={result.checkpoint_sequence}, "
+                f"current_sequence={result.current_sequence}, lag_events={lag}, "
                 f"head={result.current_head_hash}"
             )
         return 0
