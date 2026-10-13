@@ -22,7 +22,7 @@ Trajectory analysis, RCA, reflection, abstraction, cross-trajectory generalizati
 Offline scheduled consolidation, hygiene, deduplication, stale-memory detection and archival.
 
 ## Phase 7 — PreCog
-BehaviorID representation, trajectory-aware context, predictive retrieval, Jev/ranker adapter and BestNextAction integration.
+Behavior representation, trajectory-aware context, predictive retrieval, ranker adapter and BestNextAction integration.
 
 ## Phase 8 — Capability Evolution
 Skill/code/policy candidates plus Manager/Healer/Judge validation loops.
@@ -30,4 +30,19 @@ Skill/code/policy candidates plus Manager/Healer/Judge validation loops.
 ## Phase 9 — Continual Learning
 Dataset generation, offline evaluation, drift detection, champion/challenger, promotion and rollback.
 
-Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase.
+## Phase 10 — Execution Feedback
+Capture authoritative runtime outcomes as append-only, idempotent Experience events.
+
+## Phase 11 — Outcome Evaluation
+Evaluate observed behavior accuracy, successful-outcome rate, confidence calibration, evidence coverage and minimum sample size.
+
+## Phase 12 — Outcome-Gated Promotion
+Compare candidate and champion on the same Experience cohort; enforce quality gain and non-regression guardrails; preserve report-aware rollback.
+
+## Phase 13 — Promotion Audit Trail
+Record candidate/baseline identity, provenance, cohort, metrics, guardrail failures, decision and timestamp in an append-only audit sink.
+
+## Phase 14 — Durable Promotion Audit
+Persist audit records in PostgreSQL, enforce idempotent replay and reject row mutation/truncation through database triggers. Apply the migration separately and use least-privilege database roles.
+
+Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.

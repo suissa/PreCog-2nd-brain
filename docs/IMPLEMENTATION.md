@@ -13,7 +13,10 @@
 | 8 Capability Evolution | capability.py, evolution.py, Manager/Healer/Judge gate | Implemented baseline |
 | 9 Continual Learning | evaluation.py, continual.py, offline evaluation and champion/challenger rollback | Implemented baseline |
 | 10 Execution Feedback | feedback.py, runtime outcome capture as append-only Experience | Implemented baseline |
-| 11 Outcome Evaluation | outcome_evaluation.py, prediction accuracy, outcome rate, Brier score and evidence coverage | Implemented baseline |\n| 12 Outcome-Gated Promotion | continual.py, same-cohort comparison, non-regression guardrails and report-aware rollback | Implemented baseline |
+| 11 Outcome Evaluation | outcome_evaluation.py, prediction accuracy, outcome rate, Brier score and evidence coverage | Implemented baseline |
+| 12 Outcome-Gated Promotion | continual.py, same-cohort comparison, non-regression guardrails and report-aware rollback | Implemented baseline |
+| 13 Promotion Audit Trail | promotion_audit.py, immutable decision records, append-only log and idempotent replay | Implemented baseline |
+| 14 Durable Promotion Audit | postgres_promotion_audit.py, migration 002, idempotent PostgreSQL inserts and mutation-blocking triggers | Implemented baseline |
 
 ## Source-of-truth boundary
 
@@ -43,9 +46,23 @@ Rollback restores the previous candidate and its outcome report together. The ol
 
 This remains an offline decision record: promotion does not deploy a model, grant execution authority, or mutate canonical Experience. A production release controller must separately validate artifacts, rollout health and rollback execution.
 
+## Promotion audit trail
+
+`PromotionAuditRecorder` captures the decision, candidate version and provenance, optional baseline candidate, quality scores, guardrail failures, exact evaluated Experience IDs, core outcome metrics and timezone-aware recording time. The event is immutable and receives a stable ID derived from its decision identity, cohort and timestamp.
+
+`InMemoryPromotionAuditLog` is useful for deterministic tests but is not durable across process restarts. `PromotionAuditWriter` is the storage adapter contract.
+
+## Durable PostgreSQL audit
+
+`PostgresPromotionAuditLog` implements the audit writer contract against the `promotion_audit` table. Apply `sql/002_promotion_audit.sql` before using it. The insert is idempotent for an identical event ID and verifies the stored row on conflict; reusing an ID with different content raises an error. `list_events` reads the recorded evidence in stable chronological order.
+
+The migration adds checks for metric ranges and evidence arrays, plus database triggers that reject UPDATE, DELETE and TRUNCATE. This is defense in depth, not protection against a database owner or superuser disabling triggers or dropping the table. Production deployment should grant the application role only the minimum required privileges and restrict schema/trigger administration. The adapter expects a DB-API-compatible connection and does not apply migrations automatically.
+
+Audit capture is separate from promotion and deployment. It cannot authorize runtime actions, mutate canonical Experience, or imply that a candidate was deployed. The migration and the PostgreSQL adapter must both be deployed before this sink can provide durable audit storage.
+
 ## Production boundary
 
-The Python implementation is the executable reference and deterministic contract harness. PostgreSQL is the canonical v1 production substrate; sql/001_initial.sql defines the initial storage topology. Provider-specific model, embedding and reranking integrations remain adapters.
+The Python implementation is the executable reference and deterministic contract harness. PostgreSQL is the canonical v1 production substrate; `sql/001_initial.sql` defines the initial storage topology and `sql/002_promotion_audit.sql` adds the promotion audit table. Provider-specific model, embedding and reranking integrations remain adapters.
 
 ## Phase guarantees
 
