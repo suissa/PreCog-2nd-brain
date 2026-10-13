@@ -18,6 +18,7 @@
 | 13 Promotion Audit Trail | promotion_audit.py, immutable decision records, append-only log and idempotent replay | Implemented baseline |
 | 14 Durable Promotion Audit | postgres_promotion_audit.py, migration 002, idempotent PostgreSQL inserts and mutation-blocking triggers | Implemented baseline |
 | 15 Audit Integrity Verification | audit_integrity.py, migration 003, serialized SHA-256 chain and read-only integrity report | Implemented baseline |
+| 16 External Audit Checkpoints | audit_checkpoint.py, Ed25519-signed checkpoints and reconciliation against externally retained hashes | Implemented baseline |
 
 ## Source-of-truth boundary
 
@@ -65,9 +66,19 @@ Audit capture is separate from promotion and deployment. It cannot authorize run
 
 Apply `sql/003_promotion_audit_integrity.sql` after migration 002. Every new event is hashed from a canonical serialization of all decision fields plus the preceding SHA-256 digest. A singleton chain-head row is locked inside the append transaction so concurrent writers cannot fork the chain; the event insert and head update commit atomically. `verify_integrity()` recomputes hashes, checks previous-hash links and compares the verified tail with the persisted head.
 
-Rows created before migration 003 are explicitly reported as `legacy_unhashed_events`; they are not retroactively treated as verified. A report can be valid for the newly chained segment while still identifying legacy rows. The chain detects content changes, removed or reordered chained rows, and inconsistent heads when an attacker cannot rewrite all chain evidence. Because the head is stored in the same database, a database owner who can rewrite rows and the head can forge a replacement chain. For stronger tamper evidence, periodically export or sign the head hash into an independently controlled system (for example, immutable object storage or a separately administered transparency service).
+Rows created before migration 003 are explicitly reported as `legacy_unhashed_events`; they are not retroactively treated as verified. A report can be valid for the newly chained segment while still identifying legacy rows. The chain detects content changes, removed or reordered chained rows, and inconsistent heads when an attacker cannot rewrite all chain evidence. Because the head is stored in the same database, a database owner who can rewrite rows and the head can forge a replacement chain.
 
-Verification is read-only and is not a promotion/deployment signal. Promotion decisions never imply deployment or runtime authorization.
+## External signed checkpoints
+
+Phase 16 uses Ed25519 to sign a canonical checkpoint containing the audit sequence, chain hash, counts, creation time and key identifier. Store the resulting JSON outside PostgreSQL, preferably in immutable object storage or a separately administered transparency system. Keep the private key outside the database and application database credentials; distribute the public key through a trusted configuration channel.
+
+Operational sequence:
+1. Call `verify_integrity()`; do not issue a checkpoint if the chain is invalid.
+2. Read `latest_checkpoint_position()` and confirm its hash matches the verified chain head for that sequence.
+3. Call `create_checkpoint(report, sequence=sequence, private_key=private_key, public_key_id=key_id)` and store `checkpoint.to_json()` externally.
+4. During reconciliation, load the signed checkpoint, verify its signature, call `verify_integrity()`, obtain `hash_at_sequence(checkpoint.sequence)`, and pass that hash plus the current sequence to `reconcile_checkpoint`.
+
+Reconciliation accepts valid newer history: the current database may contain events after the checkpoint, but the event at the signed checkpoint sequence must still have the same hash. It detects a rewritten history when the external checkpoint remains trustworthy. Protect key rotation by retaining old public keys for historical checkpoint verification and recording key IDs in the external key registry. Checkpoints are evidence only; they never authorize promotion, deployment or runtime execution.
 
 ## Production boundary
 
