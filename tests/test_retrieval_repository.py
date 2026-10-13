@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from precog.models import Memory, MemoryLifecycle, MemoryType, Provenance
+from precog.models import Experience, Memory, MemoryLifecycle, MemoryType, Provenance
 from precog.retrieval_repository import (
     InMemoryRetrievalRepository,
     PostgresRetrievalRepository,
@@ -27,6 +27,7 @@ def memory(memory_id: str, content: str) -> Memory:
 
 def test_in_memory_retrieval_repository_contract() -> None:
     store = InMemoryStore()
+    store.append_experience(Experience("e1", "t1", NOW, NOW, "agent", "capture", {}, Provenance(("e1",), "test")))
     store.put_memory(memory("m1", "customer prefers morning"))
     result = InMemoryRetrievalRepository(store).retrieve("customer morning", now=NOW)
     assert result[0].object_id == "m1"

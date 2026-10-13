@@ -20,7 +20,7 @@ from .ranker import BehaviorRanker, JevRankerAdapter
 from .next_action import BestNextAction, BestNextActionSelector
 from .feedback import ExecutionFeedbackRecorder, ExecutionResult, RecordedExecution
 from .evolution import CapabilityEvolution, EvolutionDecision, Manager, Healer, Judge
-from .continual import ChampionChallenger, ModelCandidate, PromotionDecision
+from .continual import ChampionChallenger, ModelCandidate, PromotionDecision, OutcomePromotionDecision, outcome_quality
 
 __all__ = [
     "EmbeddingAdapter","ExtractionAdapter","MockModelAdapter","ModelAdapterError","OpenAICompatibleHTTPAdapter","PredictionAdapter","ProviderHTTPError","ProviderMalformedResponse","ProviderTimeout","RCAAdapter","ReflectionAdapter","RerankingAdapter","RetryPolicy","SummarizationAdapter",
@@ -33,6 +33,6 @@ __all__ = [
     "validate_migration_version","validate_temporal_interval","reconstruct_trajectory",
     "validate_experience_temporal_order","RelationGraph","BehaviorRanker","JevRankerAdapter",
     "BestNextAction","BestNextActionSelector","ExecutionFeedbackRecorder","ExecutionResult","RecordedExecution","CapabilityEvolution","EvolutionDecision",
-    "Manager","Healer","Judge","ChampionChallenger","ModelCandidate","PromotionDecision",
+    "Manager","Healer","Judge","ChampionChallenger","ModelCandidate","PromotionDecision","OutcomePromotionDecision","outcome_quality",
     "MarkdownProjection","MarkdownProjector","ProjectionError","project_knowledge","project_memory",
 ]
