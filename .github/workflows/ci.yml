@@ -15,7 +15,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip
-      - run: pip install -e ".[dev]"
+      - run: pip install -e ".[dev,audit-publish]"
+      - run: python -m compileall -q src scripts
       - run: pytest
       - run: mypy src
       - run: python scripts/validate_traceability.py
