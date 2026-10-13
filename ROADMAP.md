@@ -46,6 +46,9 @@ Record candidate/baseline identity, provenance, cohort, metrics, guardrail failu
 Persist audit records in PostgreSQL, enforce idempotent replay and reject row mutation/truncation through database triggers. Apply the migration separately and use least-privilege database roles.
 
 ## Phase 15 — Audit Integrity Verification
-Hash-chain newly appended audit events, serialize concurrent appends, verify event content/links/head, and report legacy records that predate integrity hashing. Export or sign head checkpoints outside the database for stronger tamper evidence.
+Hash-chain newly appended audit events, serialize concurrent appends, verify event content/links/head, and report legacy records that predate integrity hashing.
+
+## Phase 16 — External Audit Checkpoints
+Sign periodic chain checkpoints with Ed25519, store them outside the database, and reconcile the signed sequence/hash against the live audit chain to detect local rewrites.
 
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
