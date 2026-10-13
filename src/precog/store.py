@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from .models import Experience, Knowledge, Memory, MemoryLifecycle, Relation, Trajectory
+from dataclasses import replace
+from datetime import datetime, timezone
+
+from .models import Experience, Knowledge, Memory, MemoryLifecycle, Relation, RelationType, Trajectory, Provenance
 
 
 class InMemoryStore:
@@ -10,16 +13,18 @@ class InMemoryStore:
         self._experiences: dict[str, Experience] = {}
         self._trajectories: dict[str, Trajectory] = {}
         self._memories: dict[str, Memory] = {}
+        self._memory_history: dict[str, tuple[Memory, ...]] = {}
         self._knowledge: dict[str, Knowledge] = {}
         self._relations: dict[str, Relation] = {}
 
     def append_experience(self, experience: Experience) -> bool:
         existing = self._experiences.get(experience.id)
         if existing is not None:
-            if existing != experience:
+            if existing != replace(experience, recorded_at=existing.recorded_at):
                 raise ValueError("experience id already exists with different content")
             return False
-        self._experiences[experience.id] = experience
+        stored = replace(experience, recorded_at=datetime.now(timezone.utc))
+        self._experiences[experience.id] = stored
         return True
 
     def experiences(self, trajectory_id: str | None = None) -> tuple[Experience, ...]:
@@ -39,12 +44,120 @@ class InMemoryStore:
     def put_memory(self, memory: Memory) -> None:
         if any(not self._exists(i) for i in memory.source_ids):
             raise ValueError("memory provenance references unknown source")
+        existing = self._memories.get(memory.id)
+        if existing is not None:
+            if memory.version != existing.version + 1:
+                raise ValueError("memory version must advance exactly by one")
+            if not existing.lifecycle.can_transition_to(memory.lifecycle):
+                raise ValueError(
+                    f"illegal memory lifecycle transition: "
+                    f"{existing.lifecycle.value} -> {memory.lifecycle.value}"
+                )
+            history = self._memory_history.get(memory.id, (existing,))
+            self._memory_history[memory.id] = history + (memory,)
+        else:
+            if memory.version != 1:
+                raise ValueError("new memory must start at version 1")
+            self._memory_history[memory.id] = (memory,)
         self._memories[memory.id] = memory
+
+    def memory_history(self, memory_id: str) -> tuple[Memory, ...]:
+        return self._memory_history[memory_id]
 
     def memories(self, include_archived: bool = False) -> tuple[Memory, ...]:
         if include_archived:
             return tuple(self._memories.values())
         return tuple(m for m in self._memories.values() if m.lifecycle != MemoryLifecycle.ARCHIVED)
+
+    def memories_at(self, at: datetime) -> tuple[Memory, ...]:
+        return tuple(
+            m for m in self._memories.values()
+            if m.is_valid_at(at) and m.lifecycle != MemoryLifecycle.ARCHIVED
+        )
+
+    def current_memories(self) -> tuple[Memory, ...]:
+        return tuple(m for m in self._memories.values() if m.is_current)
+
+    def current_consistent_memories(self) -> tuple[Memory, ...]:
+        conflicted = {
+            endpoint
+            for relation in self._relations.values()
+            if relation.relation_type is RelationType.CONTRADICTS
+            for endpoint in (relation.source_id, relation.target_id)
+        }
+        return tuple(
+            m for m in self.current_memories() if m.id not in conflicted
+        )
+
+    def historical_memories(self, at: datetime) -> tuple[Memory, ...]:
+        return tuple(
+            m for m in self._memories.values()
+            if m.valid_to is not None and m.valid_to <= at
+        )
+
+    def record_supersession(
+        self,
+        old_memory_id: str,
+        new_memory_id: str,
+        *,
+        at: datetime,
+        provenance: "Provenance",
+        confidence: float = 1.0,
+    ) -> Relation:
+        old = self._memories[old_memory_id]
+        new = self._memories[new_memory_id]
+        if at < old.created_at:
+            raise ValueError("supersession cannot precede old memory creation")
+        if new.valid_from is not None and new.valid_from < at:
+            raise ValueError("new memory is valid before supersession time")
+        closed = replace(old, valid_to=at)
+        self._memories[old.id] = closed
+        self._memory_history[old.id] = self._memory_history[old.id] + (closed,)
+        relation = Relation(
+            f"supersedes:{old.id}:{new.id}",
+            old.id,
+            new.id,
+            RelationType.SUPERSEDES,
+            confidence,
+            at,
+            valid_from=at,
+            provenance=provenance,
+        )
+        self.put_relation(relation)
+        return relation
+
+    def record_contradiction(
+        self,
+        left_memory_id: str,
+        right_memory_id: str,
+        *,
+        at: datetime,
+        provenance: "Provenance",
+        confidence: float,
+    ) -> Relation:
+        if left_memory_id == right_memory_id:
+            raise ValueError("contradiction endpoints must differ")
+        self._memories[left_memory_id]
+        self._memories[right_memory_id]
+        relation = Relation(
+            f"contradicts:{left_memory_id}:{right_memory_id}",
+            left_memory_id,
+            right_memory_id,
+            RelationType.CONTRADICTS,
+            confidence,
+            at,
+            valid_from=at,
+            provenance=provenance,
+        )
+        self.put_relation(relation)
+        return relation
+
+    def contradictions(self, memory_id: str) -> tuple[Relation, ...]:
+        return tuple(
+            r for r in self._relations.values()
+            if r.relation_type is RelationType.CONTRADICTS
+            and (r.source_id == memory_id or r.target_id == memory_id)
+        )
 
     def put_knowledge(self, knowledge: Knowledge) -> None:
         if any(not self._exists(i) for i in knowledge.evidence_ids):

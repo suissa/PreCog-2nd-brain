@@ -36,9 +36,10 @@ class Cursor:
 
 
 class Connection:
-    def __init__(self, rows=()):
-        self.cursor_obj = Cursor(rows)
+    def __init__(self, rows=(), fetchone_values=None):
+        self.cursor_obj = Cursor(rows, fetchone_values)
         self.commits = 0
+        self.rollbacks = 0
 
     def cursor(self):
         return self.cursor_obj
@@ -46,11 +47,16 @@ class Connection:
     def commit(self):
         self.commits += 1
 
+    def rollback(self):
+        self.rollbacks += 1
 
 def exp(i="e1", t="t1"):
     return Experience(i, t, NOW, NOW, "agent", "message", {"value": 1},
                       Provenance(("source-1",), "test"))
 
+def exp(i="e1", t="t1"):
+    return Experience(i, t, NOW, NOW, "agent", "message", {"value": 1},
+                      Provenance(("source-1",), "test"))
 
 def prow(e):
     return (e.id, e.trajectory_id, e.occurred_at, e.recorded_at, e.actor, e.event_type,

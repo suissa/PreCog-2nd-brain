@@ -24,6 +24,18 @@ class MemoryLifecycle(str, Enum):
     SUPERSEDED = "superseded"
     ARCHIVED = "archived"
 
+    def can_transition_to(self, target: "MemoryLifecycle") -> bool:
+        allowed = {
+            MemoryLifecycle.CAPTURED: {MemoryLifecycle.CANDIDATE, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.CANDIDATE: {MemoryLifecycle.VALIDATED, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.VALIDATED: {MemoryLifecycle.ACTIVE, MemoryLifecycle.CANDIDATE, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.ACTIVE: {MemoryLifecycle.DORMANT, MemoryLifecycle.SUPERSEDED, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.DORMANT: {MemoryLifecycle.ACTIVE, MemoryLifecycle.SUPERSEDED, MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.SUPERSEDED: {MemoryLifecycle.ARCHIVED},
+            MemoryLifecycle.ARCHIVED: set(),
+        }
+        return target in allowed[self]
+
 
 class RelationType(str, Enum):
     DERIVED_FROM = "derived_from"
@@ -101,6 +113,7 @@ class Memory:
     lifecycle: MemoryLifecycle = MemoryLifecycle.CANDIDATE
     provenance: Provenance = field(default_factory=lambda: Provenance(("unknown",), "unknown"))
     schema_version: int = 1
+    version: int = 1
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -110,6 +123,41 @@ class Memory:
             raise ValueError("confidence and salience must be between 0 and 1")
         if self.valid_from and self.valid_to and self.valid_to < self.valid_from:
             raise ValueError("invalid memory temporal interval")
+        if self.version < 1:
+            raise ValueError("memory version must be >= 1")
+
+    def is_valid_at(self, at: datetime) -> bool:
+        if self.valid_from is not None and at < self.valid_from:
+            return False
+        if self.valid_to is not None and at >= self.valid_to:
+            return False
+        return True
+
+    @property
+    def is_current(self) -> bool:
+        return self.valid_to is None and self.lifecycle != MemoryLifecycle.ARCHIVED
+
+    def transition_to(self, lifecycle: MemoryLifecycle) -> "Memory":
+        if not self.lifecycle.can_transition_to(lifecycle):
+            raise ValueError(
+                f"illegal memory lifecycle transition: {self.lifecycle.value} -> {lifecycle.value}"
+            )
+        return Memory(
+            id=self.id,
+            memory_type=self.memory_type,
+            content=self.content,
+            source_ids=self.source_ids,
+            created_at=self.created_at,
+            valid_from=self.valid_from,
+            valid_to=self.valid_to,
+            confidence=self.confidence,
+            salience=self.salience,
+            lifecycle=lifecycle,
+            provenance=self.provenance,
+            schema_version=self.schema_version,
+            version=self.version + 1,
+            metadata=self.metadata,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,10 +227,12 @@ class RetrievalEvidence:
     provenance: Provenance
     lifecycle: MemoryLifecycle
     source_type: str
+    metadata_score: float = 0.0
 
     def __post_init__(self) -> None:
-        if not 0 <= self.score <= 1:
-            raise ValueError("score must be between 0 and 1")
+        for name, value in (("score", self.score), ("lexical_score", self.lexical_score), ("semantic_score", self.semantic_score), ("temporal_score", self.temporal_score), ("relation_score", self.relation_score), ("metadata_score", self.metadata_score)):
+            if not 0 <= value <= 1:
+                raise ValueError(f"{name} must be between 0 and 1")
 
 
 def stable_id(prefix: str, *parts: str) -> str:

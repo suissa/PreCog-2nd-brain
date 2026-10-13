@@ -42,6 +42,9 @@ class Dreamer:
                     memory.id, memory.memory_type, memory.content, memory.source_ids,
                     memory.created_at, memory.valid_from, memory.valid_to,
                     memory.confidence, memory.salience, MemoryLifecycle.ARCHIVED,
-                    memory.provenance, memory.schema_version, memory.metadata,
+                    memory.provenance,
+                    memory.schema_version,
+                    memory.version + 1,
+                    memory.metadata,
                 ))
         return DreamReport(len(memories), len(duplicate_ids), len(stale_ids), len(archive_ids))

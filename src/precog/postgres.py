@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
+from datetime import datetime, timezone
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .models import (
     Experience, Knowledge, Memory, MemoryLifecycle, MemoryType,
     Provenance, Relation, RelationType, Trajectory,
 )
 
+from .models import (
+    Experience, Knowledge, Memory, MemoryLifecycle, MemoryType,
+    Provenance, Relation, RelationType, Trajectory,
+)
 
 class PostgresStore:
     """PostgreSQL persistence adapter for canonical and derived PreCog state."""

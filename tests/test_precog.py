@@ -96,7 +96,8 @@ def test_dreaming_archives_stale_memory_without_touching_experience() -> None:
     store.put_memory(old)
     report = Dreamer(store).run(now=NOW, stale_after=timedelta(days=90))
     assert report.archived == 1
-    assert store.experiences() == (e,)
+    assert store.experiences()[0].id == e.id
+    assert store.experiences()[0].recorded_at >= e.recorded_at
     assert not store.memories()
 
 
@@ -126,3 +127,31 @@ def test_migration_is_monotonic() -> None:
     validate_migration_version(2, 1)
     with pytest.raises(ValueError):
         validate_migration_version(4, 1)
+
+
+def test_experience_recorded_at_is_assigned_by_store() -> None:
+    store = InMemoryStore()
+    e = experience("e9")
+    store.append_experience(e)
+    stored = store.experiences()[0]
+    assert stored.occurred_at == e.occurred_at
+    assert stored.recorded_at >= e.recorded_at
+
+
+def test_memory_lifecycle_rejects_illegal_transition_and_retains_history() -> None:
+    store = InMemoryStore()
+    store.append_experience(experience("e10"))
+    memory = Memory(
+        "m10", MemoryType.SEMANTIC, "fact", ("e10",), NOW,
+        lifecycle=MemoryLifecycle.CANDIDATE,
+        provenance=Provenance(("e10",), "consolidation"),
+    )
+    store.put_memory(memory)
+    validated = memory.transition_to(MemoryLifecycle.VALIDATED)
+    store.put_memory(validated)
+    active = validated.transition_to(MemoryLifecycle.ACTIVE)
+    store.put_memory(active)
+    assert tuple(m.version for m in store.memory_history("m10")) == (1, 2, 3)
+    assert store.memories() == (active,)
+    with pytest.raises(ValueError, match="illegal memory lifecycle transition"):
+        store.put_memory(active.transition_to(MemoryLifecycle.ARCHIVED).transition_to(MemoryLifecycle.ACTIVE))
