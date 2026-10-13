@@ -19,6 +19,7 @@
 | 14 Durable Promotion Audit | postgres_promotion_audit.py, migration 002, idempotent PostgreSQL inserts and mutation-blocking triggers | Implemented baseline |
 | 15 Audit Integrity Verification | audit_integrity.py, migration 003, serialized SHA-256 chain and read-only integrity report | Implemented baseline |
 | 16 External Audit Checkpoints | audit_checkpoint.py, Ed25519-signed JSON checkpoint export and history reconciliation | Implemented baseline |
+| 17 Automated Checkpoint Operations | audit_checkpoint_ops.py, one-shot CLI, atomic filesystem store, public-key registry and alert sink | Implemented baseline |
 
 ## Source-of-truth boundary
 
@@ -76,6 +77,21 @@ Verification is read-only and is not a promotion/deployment signal. Promotion de
 
 `PostgresPromotionAuditLog.reconcile_checkpoint()` verifies the checkpoint signature, re-verifies the local chain, and compares the locally observed hash at the checkpoint sequence. It fails closed for an invalid signature, invalid local chain, shorter local history, or a changed/missing checkpoint event. Newer valid events are accepted when the earlier checkpoint anchor still matches. Key rotation, secure private-key custody, and external retention/immutability are operational responsibilities, not silently provided by the library.
 
+## Automated checkpoint operations
+
+`CheckpointJob` provides one-shot checkpoint creation and reconciliation. Creation verifies the chain, compares the verified head with the latest stored sequence/hash, signs the checkpoint, validates the signature using the trusted public key selected by `public_key_id`, and rechecks the chain before publishing. If the chain is invalid, the head changes during the operation, the key is unknown, or publication fails, the job emits an alert and exits through an exception instead of reporting success.
+
+`FileCheckpointStore` publishes complete JSON using an atomic hard-link operation and refuses to overwrite an existing checkpoint. It is a reference adapter: its directory must be outside the database trust boundary. A directory on the same host is not independent protection against host/root compromise. For production, implement the `CheckpointStore` contract with separately administered or immutable storage.
+
+The CLI `scripts/checkpoint_promotion_audit.py` runs one operation per invocation and is intended for cron/systemd or an external scheduler; no hidden in-process scheduler is started. Install the optional PostgreSQL driver with `pip install -e '.[postgres]'`. Configure `DATABASE_URL`, `PRECOG_CHECKPOINT_DIR`, and `PRECOG_PUBLIC_KEY_DIR`. For creation, also set `PRECOG_PRIVATE_KEY_FILE` and `PRECOG_PUBLIC_KEY_ID`. Store private keys outside the repository with restrictive filesystem permissions. Public keys are PEM files named `<key-id>.pem`; retain old public keys after rotation so old checkpoint signatures remain verifiable.
+
+Example invocations:
+
+- `python scripts/checkpoint_promotion_audit.py create`
+- `python scripts/checkpoint_promotion_audit.py verify`
+
+The default alert sink writes to stderr. Deployments should route failures to their alerting system and configure the checkpoint directory to a separately administered destination. The CLI never creates signing keys or silently rotates them.
+
 ## Production boundary
 
 The Python implementation is the executable reference and deterministic contract harness. PostgreSQL is the canonical v1 production substrate; `sql/001_initial.sql` defines the initial storage topology, `sql/002_promotion_audit.sql` adds the promotion audit table, and `sql/003_promotion_audit_integrity.sql` adds the integrity chain. Provider-specific model, embedding and reranking integrations remain adapters.
@@ -83,5 +99,3 @@ The Python implementation is the executable reference and deterministic contract
 ## Phase guarantees
 
 Each phase has an explicit invariant surface. Later cognitive phases do not participate in correctness of earlier phases. Prediction never authorizes execution; capability evolution never bypasses validation; dreaming never mutates experience; retrieval never treats embeddings as canonical truth. Execution feedback records runtime outcomes without granting authority to prediction or action selection.
-
-The normative specification remains PRE-CORD.md; the roadmap remains ROADMAP.md.
