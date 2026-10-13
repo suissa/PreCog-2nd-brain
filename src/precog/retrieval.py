@@ -139,8 +139,16 @@ class HybridRetriever:
                 lifecycle=lifecycle,
             )
         memories = {memory.id: memory for memory in self.store.memories()}
-        lexical_by_id = {item.object_id: item for item in (lexical_candidates or ())}
-        semantic_by_id = {item.object_id: item for item in (semantic_candidates or ())}
+        lexical_by_id: dict[str, RetrievalEvidence] = {}
+        for item in lexical_candidates or ():
+            current = lexical_by_id.get(item.object_id)
+            if current is None or item.lexical_score > current.lexical_score:
+                lexical_by_id[item.object_id] = item
+        semantic_by_id: dict[str, RetrievalEvidence] = {}
+        for item in semantic_candidates or ():
+            current = semantic_by_id.get(item.object_id)
+            if current is None or item.semantic_score > current.semantic_score:
+                semantic_by_id[item.object_id] = item
         scores = metadata_scores or {}
         results: list[RetrievalEvidence] = []
         for object_id in sorted(set(lexical_by_id) | set(semantic_by_id) | set(scores)):
