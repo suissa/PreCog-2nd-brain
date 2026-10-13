@@ -11,7 +11,7 @@ from .models import Memory, MemoryLifecycle, RetrievalEvidence
 from .postgres import PostgresStore
 from .store import InMemoryStore
 
-_TOKEN = re.compile(r"[\\w-]+", re.UNICODE)
+_TOKEN = re.compile(r"[\w-]+", re.UNICODE)
 
 
 def _tokens(text: str) -> Counter[str]:

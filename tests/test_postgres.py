@@ -93,9 +93,11 @@ def test_derived_state_persistence_validates_provenance():
 
 
 def test_memory_read_excludes_archived_by_default():
-    active = Memory("m1", MemoryType.SEMANTIC, "a", ("e1",), NOW)
+    active = Memory("m1", MemoryType.SEMANTIC, "a", ("e1",), NOW,
+                    provenance=Provenance(("e1",), "x"))
     archived = Memory("m2", MemoryType.SEMANTIC, "b", ("e1",), NOW,
-                      lifecycle=MemoryLifecycle.ARCHIVED)
+                      lifecycle=MemoryLifecycle.ARCHIVED,
+                      provenance=Provenance(("e1",), "x"))
     rows = [
         (active.id, active.memory_type.value, active.content, ["e1"], NOW, None, None,
          active.confidence, active.salience, active.lifecycle.value,
@@ -108,8 +110,10 @@ def test_memory_read_excludes_archived_by_default():
 
 
 def test_knowledge_and_relation_roundtrip_decoders():
-    knowledge = Knowledge("k1", "statement", "scope", ("e1",), .8, "active", 1, NOW)
-    relation = Relation("r1", "e1", "k1", RelationType.SUPPORTS, .9, NOW)
+    knowledge = Knowledge("k1", "statement", "scope", ("e1",), .8, "active", 1, NOW,
+                          provenance=Provenance(("e1",), "x"))
+    relation = Relation("r1", "e1", "k1", RelationType.SUPPORTS, .9, NOW,
+                        provenance=Provenance(("e1",), "x"))
     krow = (knowledge.id, knowledge.statement, knowledge.scope, ["e1"], knowledge.confidence,
             knowledge.status, knowledge.version, knowledge.created_at, None, None,
             {"source_ids":["e1"],"derivation":"x","schema_version":1})
