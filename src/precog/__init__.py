@@ -1,9 +1,10 @@
-""""PreCog persistent cognitive substrate reference implementation."""
+"""PreCog persistent cognitive substrate reference implementation."""
 from .adapters import (EmbeddingAdapter, ExtractionAdapter, MockModelAdapter, ModelAdapterError, OpenAICompatibleHTTPAdapter, PredictionAdapter, ProviderHTTPError, ProviderMalformedResponse, ProviderTimeout, RCAAdapter, ReflectionAdapter, RerankingAdapter, RetryPolicy, SummarizationAdapter)
 from .embeddings import EmbeddingProvider, EmbeddingRecord, DeterministicEmbeddingProvider, build_embedding, is_embedding_current
 from .models import Behavior, Experience, Knowledge, Memory, MemoryLifecycle, MemoryType, Relation, RelationType, RetrievalEvidence, Trajectory
 from .store import InMemoryStore
 from .postgres import PostgresStore
+from .postgres_promotion_audit import PostgresPromotionAuditLog
 from .retrieval import HybridRetriever
 from .retrieval_repository import RetrievalRepository, InMemoryRetrievalRepository, PostgresRetrievalRepository
 from .consolidation import Consolidator, ConsolidationProposal
@@ -27,7 +28,7 @@ __all__ = [
     "EmbeddingAdapter","ExtractionAdapter","MockModelAdapter","ModelAdapterError","OpenAICompatibleHTTPAdapter","PredictionAdapter","ProviderHTTPError","ProviderMalformedResponse","ProviderTimeout","RCAAdapter","ReflectionAdapter","RerankingAdapter","RetryPolicy","SummarizationAdapter",
     "EmbeddingProvider","EmbeddingRecord","DeterministicEmbeddingProvider","build_embedding","is_embedding_current",
     "Behavior","Experience","Knowledge","Memory","MemoryLifecycle","MemoryType",
-    "Relation","RelationType","RetrievalEvidence","Trajectory","InMemoryStore","PostgresStore",
+    "Relation","RelationType","RetrievalEvidence","Trajectory","InMemoryStore","PostgresStore","PostgresPromotionAuditLog",
     "HybridRetriever","RetrievalRepository","InMemoryRetrievalRepository","PostgresRetrievalRepository","Consolidator","ConsolidationProposal","Dreamer","DreamReport",
     "BehaviorPredictor","BehaviorPrediction","CapabilityCandidate","CapabilityValidator",
     "EvaluationReport","Evaluator","OutcomeEvaluator","OutcomeEvaluationReport","PredictionObservation","DataClass","FieldPolicy","PrivacyPolicy",
