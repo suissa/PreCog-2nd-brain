@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
+
+from .audit_checkpoint import (
+    PromotionAuditCheckpoint,
+    PromotionAuditReconciliation,
+    create_checkpoint,
+    reconcile_checkpoint as reconcile_external_checkpoint,
+)
 
 from .audit_integrity import GENESIS_HASH, PromotionAuditIntegrityReport, calculate_event_hash, verify_chain
 from .promotion_audit import PromotionAuditEvent, PromotionAuditWriter
 
 
 class PostgresPromotionAuditLog(PromotionAuditWriter):
-    """Durable append-only audit sink with a serialized SHA-256 event chain.
-
-    Apply migrations 002 and 003 before use. The chain state row serializes
-    concurrent appends; integrity checks are read-only and never authorize promotion.
-    """
+    """Durable append-only audit sink with a serialized SHA-256 event chain."""
 
     def __init__(self, connection: Any) -> None:
         self._connection = connection
@@ -128,6 +132,106 @@ class PostgresPromotionAuditLog(PromotionAuditWriter):
             for row in raw_rows
         )
         return verify_chain(rows, expected_head_hash=state[0])
+
+    def latest_checkpoint_position(self) -> tuple[int, str]:
+        """Return the latest sequence and its hash for an external signed checkpoint."""
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT audit_sequence, event_hash
+                    FROM promotion_audit
+                    WHERE event_hash IS NOT NULL
+                    ORDER BY audit_sequence DESC LIMIT 1"""
+            )
+            row = cursor.fetchone()
+        self._connection.commit()
+        if row is None:
+            return 0, GENESIS_HASH
+        return int(row[0]), str(row[1])
+
+    def hash_at_sequence(self, sequence: int) -> str | None:
+        """Read the event hash anchored by an external checkpoint sequence."""
+        if sequence < 0:
+            raise ValueError("sequence must be non-negative")
+        if sequence == 0:
+            return GENESIS_HASH
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT event_hash FROM promotion_audit WHERE audit_sequence = %s",
+                (sequence,),
+            )
+            row = cursor.fetchone()
+        self._connection.commit()
+        return None if row is None or row[0] is None else str(row[0])
+
+    def export_checkpoint(
+        self,
+        *,
+        private_key: Any,
+        public_key_id: str,
+        created_at: datetime | None = None,
+    ) -> PromotionAuditCheckpoint:
+        """Create a signed checkpoint for the current verified hash-chain head.
+
+        Store the returned JSON outside the database (and preferably outside the
+        database administrator's control). This method never writes the checkpoint
+        to PostgreSQL.
+        """
+        report = self.verify_integrity()
+        if not report.valid:
+            raise ValueError("cannot export checkpoint for an invalid audit chain")
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT audit_sequence, event_hash FROM promotion_audit
+                    WHERE event_hash IS NOT NULL
+                    ORDER BY audit_sequence DESC LIMIT 1"""
+            )
+            row = cursor.fetchone()
+        self._connection.commit()
+        sequence = int(row[0]) if row is not None else 0
+        stored_head = row[1] if row is not None else GENESIS_HASH
+        if stored_head != report.verified_head_hash:
+            raise RuntimeError("audit chain head changed while creating checkpoint")
+        return create_checkpoint(
+            report,
+            sequence=sequence,
+            private_key=private_key,
+            public_key_id=public_key_id,
+            created_at=created_at,
+        )
+
+    def reconcile_checkpoint(
+        self,
+        checkpoint: PromotionAuditCheckpoint,
+        *,
+        public_key: Any,
+    ) -> PromotionAuditReconciliation:
+        """Compare the local verified chain against a checkpoint stored externally."""
+        report = self.verify_integrity()
+        with self._connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT audit_sequence, event_hash FROM promotion_audit
+                    WHERE event_hash IS NOT NULL
+                    ORDER BY audit_sequence DESC LIMIT 1"""
+            )
+            latest = cursor.fetchone()
+            current_sequence = int(latest[0]) if latest is not None else 0
+            cursor.execute(
+                """SELECT event_hash FROM promotion_audit
+                    WHERE audit_sequence = %s""",
+                (checkpoint.sequence,),
+            ) if checkpoint.sequence > 0 else None
+            at_checkpoint = cursor.fetchone() if checkpoint.sequence > 0 else None
+        self._connection.commit()
+        observed_hash = at_checkpoint[0] if at_checkpoint is not None else (
+            GENESIS_HASH if checkpoint.sequence == 0 else None
+        )
+        return reconcile_external_checkpoint(
+            checkpoint,
+            public_key=public_key,
+            current_report=report,
+            current_sequence=current_sequence,
+            observed_hash_at_checkpoint=observed_hash,
+        )
 
     @staticmethod
     def _json(value: Any) -> str:

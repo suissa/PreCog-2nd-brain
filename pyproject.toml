@@ -7,7 +7,7 @@ name = "precog-intent-trajectory"
 version = "0.1.0"
 description = "Provider-neutral Intent Trajectory semantic domain"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["cryptography>=42"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "mypy>=1.11"]

@@ -18,6 +18,7 @@
 | 13 Promotion Audit Trail | promotion_audit.py, immutable decision records, append-only log and idempotent replay | Implemented baseline |
 | 14 Durable Promotion Audit | postgres_promotion_audit.py, migration 002, idempotent PostgreSQL inserts and mutation-blocking triggers | Implemented baseline |
 | 15 Audit Integrity Verification | audit_integrity.py, migration 003, serialized SHA-256 chain and read-only integrity report | Implemented baseline |
+| 16 External Audit Checkpoints | audit_checkpoint.py, Ed25519-signed JSON checkpoint export and history reconciliation | Implemented baseline |
 
 ## Source-of-truth boundary
 
@@ -68,6 +69,12 @@ Apply `sql/003_promotion_audit_integrity.sql` after migration 002. Every new eve
 Rows created before migration 003 are explicitly reported as `legacy_unhashed_events`; they are not retroactively treated as verified. A report can be valid for the newly chained segment while still identifying legacy rows. The chain detects content changes, removed or reordered chained rows, and inconsistent heads when an attacker cannot rewrite all chain evidence. Because the head is stored in the same database, a database owner who can rewrite rows and the head can forge a replacement chain. For stronger tamper evidence, periodically export or sign the head hash into an independently controlled system (for example, immutable object storage or a separately administered transparency service).
 
 Verification is read-only and is not a promotion/deployment signal. Promotion decisions never imply deployment or runtime authorization.
+
+## External checkpoint and reconciliation
+
+`PostgresPromotionAuditLog.export_checkpoint()` verifies the chain and signs the latest chained sequence/hash using Ed25519. It returns portable JSON and deliberately does not store the checkpoint in PostgreSQL. Copy that JSON to an independently administered destination (for example, immutable object storage or a transparency service); retain the public key and key ID separately from the database.
+
+`PostgresPromotionAuditLog.reconcile_checkpoint()` verifies the checkpoint signature, re-verifies the local chain, and compares the locally observed hash at the checkpoint sequence. It fails closed for an invalid signature, invalid local chain, shorter local history, or a changed/missing checkpoint event. Newer valid events are accepted when the earlier checkpoint anchor still matches. Key rotation, secure private-key custody, and external retention/immutability are operational responsibilities, not silently provided by the library.
 
 ## Production boundary
 
