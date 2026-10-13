@@ -65,7 +65,13 @@ def test_checkpoint_rejects_invalid_current_chain_and_tampered_signature():
         public_key_id="audit-key", created_at=NOW,
     )
     tampered = PromotionAuditCheckpoint(
-        **{**checkpoint.signed_payload(), "head_hash": "d" * 64},
+        version=checkpoint.version,
+        sequence=checkpoint.sequence,
+        head_hash="d" * 64,
+        checked_events=checkpoint.checked_events,
+        legacy_unhashed_events=checkpoint.legacy_unhashed_events,
+        created_at=checkpoint.created_at,
+        public_key_id=checkpoint.public_key_id,
         signature=checkpoint.signature,
     )
     assert not verify_checkpoint_signature(tampered, public_key=private.public_key())
