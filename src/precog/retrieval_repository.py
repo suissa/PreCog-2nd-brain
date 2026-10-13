@@ -97,7 +97,6 @@ class InMemoryRetrievalRepository:
             )
             temporal = _temporal(memory, now)
             relation = max(0.0, min(1.0, relation_scores.get(memory.id, 0.0)))
-            # Temporal validity is not evidence on its own.
             if lexical <= 0 and semantic <= 0 and relation <= 0:
                 continue
             score = min(1.0, 0.45 * lexical + 0.30 * semantic + 0.15 * temporal + 0.10 * relation)
