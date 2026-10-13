@@ -13,7 +13,9 @@
 | 8 Capability Evolution | capability.py, evolution.py, Manager/Healer/Judge gate | Implemented baseline |
 | 9 Continual Learning | evaluation.py, continual.py, offline evaluation and champion/challenger rollback | Implemented baseline |
 | 10 Execution Feedback | feedback.py, runtime outcome capture as append-only Experience | Implemented baseline |
-| 11 Outcome Evaluation | outcome_evaluation.py, prediction accuracy, outcome rate, Brier score and evidence coverage | Implemented baseline |\n| 12 Outcome-Gated Promotion | continual.py, same-cohort comparison, non-regression guardrails and report-aware rollback | Implemented baseline |
+| 11 Outcome Evaluation | outcome_evaluation.py, prediction accuracy, outcome rate, Brier score and evidence coverage | Implemented baseline |
+| 12 Outcome-Gated Promotion | continual.py, same-cohort comparison, non-regression guardrails and report-aware rollback | Implemented baseline |
+| 13 Promotion Audit Trail | promotion_audit.py, immutable decision records, append-only log and idempotent replay | Implemented baseline |
 
 ## Source-of-truth boundary
 
@@ -42,6 +44,14 @@ The deterministic quality score is the mean of Behavior accuracy, successful-out
 Rollback restores the previous candidate and its outcome report together. The older metric-only `evaluate` method remains for compatibility, but it does not provide the outcome guarantees of `evaluate_outcomes`.
 
 This remains an offline decision record: promotion does not deploy a model, grant execution authority, or mutate canonical Experience. A production release controller must separately validate artifacts, rollout health and rollback execution.
+
+## Promotion audit trail
+
+`PromotionAuditRecorder` captures the decision, candidate version and provenance, optional baseline candidate, quality scores, guardrail failures, exact evaluated Experience IDs, core outcome metrics and timezone-aware recording time. The event is immutable and receives a stable ID derived from its decision identity, cohort and timestamp.
+
+`InMemoryPromotionAuditLog` is a reference append-only sink: replaying an identical event is idempotent, while reusing an event ID with different content is rejected. `PromotionAuditWriter` is the adapter boundary for a durable sink such as PostgreSQL; the in-memory implementation is not itself durable across process restarts.
+
+Audit capture is separate from promotion and deployment. It cannot authorize runtime actions, mutate Experience, or imply that a candidate was deployed. A production integration must persist these events durably and enforce append-only permissions at the storage boundary.
 
 ## Production boundary
 

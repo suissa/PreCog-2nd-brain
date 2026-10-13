@@ -1,4 +1,4 @@
-"""PreCog persistent cognitive substrate reference implementation."""
+""""PreCog persistent cognitive substrate reference implementation."""
 from .adapters import (EmbeddingAdapter, ExtractionAdapter, MockModelAdapter, ModelAdapterError, OpenAICompatibleHTTPAdapter, PredictionAdapter, ProviderHTTPError, ProviderMalformedResponse, ProviderTimeout, RCAAdapter, ReflectionAdapter, RerankingAdapter, RetryPolicy, SummarizationAdapter)
 from .embeddings import EmbeddingProvider, EmbeddingRecord, DeterministicEmbeddingProvider, build_embedding, is_embedding_current
 from .models import Behavior, Experience, Knowledge, Memory, MemoryLifecycle, MemoryType, Relation, RelationType, RetrievalEvidence, Trajectory
@@ -21,6 +21,7 @@ from .next_action import BestNextAction, BestNextActionSelector
 from .feedback import ExecutionFeedbackRecorder, ExecutionResult, RecordedExecution
 from .evolution import CapabilityEvolution, EvolutionDecision, Manager, Healer, Judge
 from .continual import ChampionChallenger, ModelCandidate, PromotionDecision, OutcomePromotionDecision, outcome_quality
+from .promotion_audit import InMemoryPromotionAuditLog, PromotionAuditEvent, PromotionAuditRecorder, PromotionAuditWriter
 
 __all__ = [
     "EmbeddingAdapter","ExtractionAdapter","MockModelAdapter","ModelAdapterError","OpenAICompatibleHTTPAdapter","PredictionAdapter","ProviderHTTPError","ProviderMalformedResponse","ProviderTimeout","RCAAdapter","ReflectionAdapter","RerankingAdapter","RetryPolicy","SummarizationAdapter",
@@ -34,5 +35,6 @@ __all__ = [
     "validate_experience_temporal_order","RelationGraph","BehaviorRanker","JevRankerAdapter",
     "BestNextAction","BestNextActionSelector","ExecutionFeedbackRecorder","ExecutionResult","RecordedExecution","CapabilityEvolution","EvolutionDecision",
     "Manager","Healer","Judge","ChampionChallenger","ModelCandidate","PromotionDecision","OutcomePromotionDecision","outcome_quality",
+    "InMemoryPromotionAuditLog","PromotionAuditEvent","PromotionAuditRecorder","PromotionAuditWriter",
     "MarkdownProjection","MarkdownProjector","ProjectionError","project_knowledge","project_memory",
 ]
