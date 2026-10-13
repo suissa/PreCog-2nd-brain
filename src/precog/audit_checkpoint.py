@@ -102,13 +102,14 @@ def create_checkpoint(
     if timestamp.tzinfo is None or timestamp.utcoffset() is None:
         raise ValueError("created_at must be timezone-aware")
     key = _private_key(private_key)
+    created_at_iso = timestamp.astimezone(timezone.utc).isoformat()
     payload = {
         "version": CHECKPOINT_VERSION,
         "sequence": sequence,
         "head_hash": report.verified_head_hash,
         "checked_events": report.checked_events,
         "legacy_unhashed_events": report.legacy_unhashed_events,
-        "created_at": timestamp.astimezone(timezone.utc).isoformat(),
+        "created_at": created_at_iso,
         "public_key_id": public_key_id,
     }
     signature = base64.b64encode(key.sign(_canonical(payload))).decode("ascii")
@@ -118,7 +119,7 @@ def create_checkpoint(
         head_hash=report.verified_head_hash,
         checked_events=report.checked_events,
         legacy_unhashed_events=report.legacy_unhashed_events,
-        created_at=payload["created_at"],
+        created_at=created_at_iso,
         public_key_id=public_key_id,
         signature=signature,
     )
