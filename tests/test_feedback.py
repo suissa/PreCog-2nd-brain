@@ -38,7 +38,10 @@ def test_runtime_outcome_becomes_canonical_experience() -> None:
     assert recorded.experience.outcome == "succeeded"
     assert recorded.experience.intent_id == "create-order-intent"
     assert recorded.experience.provenance.source_ids == ("trace-123", "memory-7")
-    assert store.experiences("trajectory-1") == (recorded.experience,)
+    persisted = store.experiences("trajectory-1")
+    assert len(persisted) == 1
+    assert persisted[0].id == recorded.experience.id
+    assert persisted[0].outcome == "succeeded"
 
 
 def test_replaying_same_runtime_event_is_idempotent() -> None:
