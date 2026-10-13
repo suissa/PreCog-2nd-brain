@@ -19,7 +19,8 @@
 | 14 Durable Promotion Audit | postgres_promotion_audit.py, migration 002, idempotent PostgreSQL inserts and mutation-blocking triggers | Implemented baseline |
 | 15 Audit Integrity Verification | audit_integrity.py, migration 003, serialized SHA-256 chain and read-only integrity report | Implemented baseline |
 | 16 External Audit Checkpoints | audit_checkpoint.py, Ed25519-signed JSON checkpoint export and history reconciliation | Implemented baseline |
-| 17 Automated Checkpoint Operations | audit_checkpoint_ops.py, one-shot CLI, atomic filesystem store, public-key registry and alert sink | Implemented baseline |\n| 18 Independent Cloud Publication | S3CheckpointStore, create-only writes, OIDC-enabled scheduled GitHub Actions workflow | Implemented baseline; AWS configuration required |
+| 17 Automated Checkpoint Operations | audit_checkpoint_ops.py, one-shot CLI, atomic filesystem store, public-key registry and alert sink | Implemented baseline |
+| 18 Independent Cloud Publication | S3CheckpointStore, create-only writes, OIDC-enabled scheduled GitHub Actions workflow | Implemented baseline; AWS configuration required |
 
 ## Source-of-truth boundary
 
