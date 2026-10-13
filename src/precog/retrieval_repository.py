@@ -11,7 +11,7 @@ from .models import Memory, MemoryLifecycle, RetrievalEvidence
 from .postgres import PostgresStore
 from .store import InMemoryStore
 
-_TOKEN = re.compile(r"[\\w-]+", re.UNICODE)
+_TOKEN = re.compile(r"[\w-]+", re.UNICODE)
 
 
 def _tokens(text: str) -> Counter[str]:
@@ -97,6 +97,9 @@ class InMemoryRetrievalRepository:
             )
             temporal = _temporal(memory, now)
             relation = max(0.0, min(1.0, relation_scores.get(memory.id, 0.0)))
+            # Temporal validity is not evidence on its own.
+            if lexical <= 0 and semantic <= 0 and relation <= 0:
+                continue
             score = min(1.0, 0.45 * lexical + 0.30 * semantic + 0.15 * temporal + 0.10 * relation)
             if score <= 0:
                 continue
