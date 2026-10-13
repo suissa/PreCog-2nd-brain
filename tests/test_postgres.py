@@ -93,9 +93,11 @@ def test_derived_state_persistence_validates_provenance():
 
 
 def test_memory_read_excludes_archived_by_default():
-    active = Memory("m1", MemoryType.SEMANTIC, "a", ("e1",), NOW)
+    active = Memory("m1", MemoryType.SEMANTIC, "a", ("e1",), NOW,
+                    provenance=Provenance(("e1",), "x"))
     archived = Memory("m2", MemoryType.SEMANTIC, "b", ("e1",), NOW,
-                      lifecycle=MemoryLifecycle.ARCHIVED)
+                      lifecycle=MemoryLifecycle.ARCHIVED,
+                      provenance=Provenance(("e1",), "x"))
     rows = [
         (active.id, active.memory_type.value, active.content, ["e1"], NOW, None, None,
          active.confidence, active.salience, active.lifecycle.value,
