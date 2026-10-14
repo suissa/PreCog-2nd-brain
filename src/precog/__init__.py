@@ -10,6 +10,7 @@ from .audit_checkpoint import (
     PromotionAuditCheckpoint, PromotionAuditReconciliation, create_checkpoint,
     reconcile_checkpoint, verify_checkpoint_signature,
 )
+from .audit_incidents import LocalAuditIncidentSink
 from .audit_checkpoint_ops import (
     AuditAlertSink, CheckpointJob, CheckpointStore, FileCheckpointStore,
     PublicKeyRegistry, StderrAuditAlertSink,
@@ -48,6 +49,6 @@ __all__ = [
     "InMemoryPromotionAuditLog","PromotionAuditEvent","PromotionAuditRecorder","PromotionAuditWriter",
     "PromotionAuditIntegrityReport","calculate_event_hash",
     "PromotionAuditCheckpoint","PromotionAuditReconciliation","create_checkpoint","reconcile_checkpoint","verify_checkpoint_signature",
-    "AuditAlertSink","CheckpointJob","CheckpointStore","FileCheckpointStore","PublicKeyRegistry","StderrAuditAlertSink",
+    "AuditAlertSink","CheckpointJob","CheckpointStore","FileCheckpointStore","PublicKeyRegistry","StderrAuditAlertSink","LocalAuditIncidentSink",
     "MarkdownProjection","MarkdownProjector","ProjectionError","project_knowledge","project_memory",
 ]
