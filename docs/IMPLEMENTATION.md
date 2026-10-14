@@ -90,7 +90,7 @@ Example invocations:
 - `python scripts/checkpoint_promotion_audit.py create`
 - `python scripts/checkpoint_promotion_audit.py verify`
 
-The default alert sink writes to stderr. Failures are written to stderr. Local operators may capture stderr using their existing local process supervisor. No webhook, hosted alerting service, or separately administered storage is required. The CLI never creates signing keys or silently rotates them.
+The default alert sink writes to stderr. `LocalAuditIncidentSink` can additionally append each alert to a local JSONL incident journal, using restrictive file permissions and `fsync` before returning. The journal records a unique incident ID, UTC timestamp, alert kind, and message; it makes no network calls. This file is operational evidence, not tamper-proof storage against a host administrator. Local operators may also capture stderr using their existing local process supervisor. No webhook, hosted alerting service, or separately administered storage is required. The CLI never creates signing keys or silently rotates them.
 
 ## Production boundary
 
