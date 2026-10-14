@@ -67,30 +67,30 @@ Audit capture is separate from promotion and deployment. It cannot authorize run
 
 Apply `sql/003_promotion_audit_integrity.sql` after migration 002. Every new event is hashed from a canonical serialization of all decision fields plus the preceding SHA-256 digest. A singleton chain-head row is locked inside the append transaction so concurrent writers cannot fork the chain; the event insert and head update commit atomically. `verify_integrity()` recomputes hashes, checks previous-hash links and compares the verified tail with the persisted head.
 
-Rows created before migration 003 are explicitly reported as `legacy_unhashed_events`; they are not retroactively treated as verified. A report can be valid for the newly chained segment while still identifying legacy rows. The chain detects content changes, removed or reordered chained rows, and inconsistent heads when an attacker cannot rewrite all chain evidence. Because the head is stored in the same database, a database owner who can rewrite rows and the head can forge a replacement chain. For stronger tamper evidence, periodically export or sign the head hash into an independently controlled system (for example, immutable object storage or a separately administered transparency service).
+Rows created before migration 003 are explicitly reported as `legacy_unhashed_events`; they are not retroactively treated as verified. A report can be valid for the newly chained segment while still identifying legacy rows. The chain detects content changes, removed or reordered chained rows, and inconsistent heads when an attacker cannot rewrite all chain evidence. Because the head is stored in the same database, a database owner who can rewrite rows and the head can forge a replacement chain. For stronger evidence within a local deployment, periodically export or sign the head hash to a retained local checkpoint file. This does not protect against an attacker who controls both the database and the host/filesystem.
 
 Verification is read-only and is not a promotion/deployment signal. Promotion decisions never imply deployment or runtime authorization.
 
-## External checkpoint and reconciliation
+## Signed checkpoint and local reconciliation
 
-`PostgresPromotionAuditLog.export_checkpoint()` verifies the chain and signs the latest chained sequence/hash using Ed25519. It returns portable JSON and deliberately does not store the checkpoint in PostgreSQL. Copy that JSON to an independently administered destination (for example, immutable object storage or a transparency service); retain the public key and key ID separately from the database.
+`PostgresPromotionAuditLog.export_checkpoint()` verifies the chain and signs the latest chained sequence/hash using Ed25519. It returns portable JSON and deliberately does not store the checkpoint in PostgreSQL. Store the JSON as a local file in a configured directory and retain the public key and key ID separately from the database. No cloud or external storage service is required.
 
-`PostgresPromotionAuditLog.reconcile_checkpoint()` verifies the checkpoint signature, re-verifies the local chain, and compares the locally observed hash at the checkpoint sequence. It fails closed for an invalid signature, invalid local chain, shorter local history, or a changed/missing checkpoint event. Newer valid events are accepted when the earlier checkpoint anchor still matches. Key rotation, secure private-key custody, and external retention/immutability are operational responsibilities, not silently provided by the library.
+`PostgresPromotionAuditLog.reconcile_checkpoint()` verifies the checkpoint signature, re-verifies the local chain, and compares the locally observed hash at the checkpoint sequence. It fails closed for an invalid signature, invalid local chain, shorter local history, or a changed/missing checkpoint event. Newer valid events are accepted when the earlier checkpoint anchor still matches. Key rotation and secure private-key custody are local operational responsibilities, not silently provided by the library.
 
 ## Automated checkpoint operations
 
 `CheckpointJob` provides one-shot checkpoint creation and reconciliation. Creation verifies the chain, compares the verified head with the latest stored sequence/hash, signs the checkpoint, validates the signature using the trusted public key selected by `public_key_id`, and rechecks the chain before publishing. If the chain is invalid, the head changes during the operation, the key is unknown, or publication fails, the job emits an alert and exits through an exception instead of reporting success.
 
-`FileCheckpointStore` publishes complete JSON using an atomic hard-link operation and refuses to overwrite an existing checkpoint. It is a reference adapter: its directory must be outside the database trust boundary. A directory on the same host is not independent protection against host/root compromise. For production, implement the `CheckpointStore` contract with separately administered or immutable storage.
+`FileCheckpointStore` publishes complete JSON using an atomic hard-link operation and refuses to overwrite an existing checkpoint. Configure a local directory with appropriate filesystem permissions and backups. Because it may reside on the same host as PostgreSQL, it does not protect against a host/root compromise; this limitation is explicit and no external storage is assumed.
 
-The CLI `scripts/checkpoint_promotion_audit.py` runs one operation per invocation and is intended for cron/systemd or an external scheduler; no hidden in-process scheduler is started. Install the optional PostgreSQL driver with `pip install -e '.[postgres]'`. Configure `DATABASE_URL`, `PRECOG_CHECKPOINT_DIR`, and `PRECOG_PUBLIC_KEY_DIR`. For creation, also set `PRECOG_PRIVATE_KEY_FILE` and `PRECOG_PUBLIC_KEY_ID`. Store private keys outside the repository with restrictive filesystem permissions. Public keys are PEM files named `<key-id>.pem`; retain old public keys after rotation so old checkpoint signatures remain verifiable.
+The CLI `scripts/checkpoint_promotion_audit.py` runs one operation per invocation and is intended for local cron/systemd; no hidden in-process scheduler or hosted scheduler is started. Install the optional PostgreSQL driver with `pip install -e '.[postgres]'`. Configure `DATABASE_URL`, `PRECOG_CHECKPOINT_DIR`, and `PRECOG_PUBLIC_KEY_DIR`. For creation, also set `PRECOG_PRIVATE_KEY_FILE` and `PRECOG_PUBLIC_KEY_ID`. Store private keys outside the repository with restrictive filesystem permissions. Public keys are PEM files named `<key-id>.pem`; retain old public keys after rotation so old checkpoint signatures remain verifiable.
 
 Example invocations:
 
 - `python scripts/checkpoint_promotion_audit.py create`
 - `python scripts/checkpoint_promotion_audit.py verify`
 
-The default alert sink writes to stderr. Deployments should route failures to their alerting system and configure the checkpoint directory to a separately administered destination. The CLI never creates signing keys or silently rotates them.
+The default alert sink writes to stderr. Failures are written to stderr. Local operators may capture stderr using their existing local process supervisor. No webhook, hosted alerting service, or separately administered storage is required. The CLI never creates signing keys or silently rotates them.
 
 ## Production boundary
 
