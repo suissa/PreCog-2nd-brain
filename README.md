@@ -7,7 +7,7 @@ A ideia não é apenas armazenar conversas, resumir textos ou adicionar um banco
 > **Lei fundamental:** experiência é evidência; memória e conhecimento são estados derivados. Um resumo, embedding, grafo ou resposta de modelo nunca substitui a experiência original como fonte de verdade.
 
 - **PreCog** é a camada cognitiva persistente.
-- **XP.2Flow** é a camada declarativa que pode orquestrar transformações entre experiência, consolidação, conhecimento, capacidade e comportamento.
+- **XP.2Flow** é a camada declarativa que pode orquestrar transformações entre experiência, consolidação, conhecimento, capacidade e comportamento. Consulte o [contrato XP.2Flow](docs/XP.2Flow.md), que separa o protocolo conceitual do runtime ainda a implementar.
 - O contrato normativo está em [PRE-CORD.md](PRE-CORD.md); visão técnica em [ARCHITECTURE.md](ARCHITECTURE.md), [TECHNOLOGY.md](TECHNOLOGY.md) e [ROADMAP.md](ROADMAP.md).
 
 ## 1. A evolução: COG + dreaming + knowledge graph
