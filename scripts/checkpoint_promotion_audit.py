@@ -20,7 +20,11 @@ def main() -> int:
     parser.add_argument("--private-key-file", default=os.getenv("PRECOG_PRIVATE_KEY_FILE"))
     parser.add_argument("--public-key-id", default=os.getenv("PRECOG_PUBLIC_KEY_ID"))
     parser.add_argument("--database-url", default=os.getenv("DATABASE_URL"))
-    parser.add_argument("--incident-log", default=os.getenv("PRECOG_AUDIT_INCIDENT_LOG"))
+    parser.add_argument(
+        "--incident-log",
+        default=os.getenv("PRECOG_AUDIT_INCIDENT_LOG"),
+        help="local incident journal (default: PRECOG_AUDIT_INCIDENT_LOG environment variable)",
+    )
     args = parser.parse_args()
 
     required = {
