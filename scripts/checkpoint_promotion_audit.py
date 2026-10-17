@@ -20,6 +20,7 @@ def main() -> int:
     parser.add_argument("--private-key-file", default=os.getenv("PRECOG_PRIVATE_KEY_FILE"))
     parser.add_argument("--public-key-id", default=os.getenv("PRECOG_PUBLIC_KEY_ID"))
     parser.add_argument("--database-url", default=os.getenv("DATABASE_URL"))
+    parser.add_argument("--incident-log", default=os.getenv("PRECOG_AUDIT_INCIDENT_LOG"))
     args = parser.parse_args()
 
     required = {
@@ -43,6 +44,7 @@ def main() -> int:
     from precog.audit_checkpoint_ops import (
         CheckpointJob, FileCheckpointStore, PublicKeyRegistry, StderrAuditAlertSink,
     )
+    from precog.audit_incidents import LocalAuditIncidentSink
     from precog.postgres_promotion_audit import PostgresPromotionAuditLog
 
     connection = psycopg.connect(args.database_url)
@@ -51,7 +53,11 @@ def main() -> int:
             audit_log=PostgresPromotionAuditLog(connection),
             checkpoint_store=FileCheckpointStore(Path(args.checkpoint_dir)),
             public_keys=PublicKeyRegistry(args.public_key_dir),
-            alert_sink=StderrAuditAlertSink(),
+            alert_sink=(
+                LocalAuditIncidentSink(args.incident_log)
+                if args.incident_log
+                else StderrAuditAlertSink()
+            ),
         )
         if args.operation == "create":
             key_path = Path(args.private_key_file)

@@ -83,14 +83,14 @@ Verification is read-only and is not a promotion/deployment signal. Promotion de
 
 `FileCheckpointStore` publishes complete JSON using an atomic hard-link operation and refuses to overwrite an existing checkpoint. Configure a local directory with appropriate filesystem permissions and backups. Because it may reside on the same host as PostgreSQL, it does not protect against a host/root compromise; this limitation is explicit and no external storage is assumed.
 
-The CLI `scripts/checkpoint_promotion_audit.py` runs one operation per invocation and is intended for local cron/systemd; no hidden in-process scheduler or hosted scheduler is started. Install the optional PostgreSQL driver with `pip install -e '.[postgres]'`. Configure `DATABASE_URL`, `PRECOG_CHECKPOINT_DIR`, and `PRECOG_PUBLIC_KEY_DIR`. For creation, also set `PRECOG_PRIVATE_KEY_FILE` and `PRECOG_PUBLIC_KEY_ID`. Store private keys outside the repository with restrictive filesystem permissions. Public keys are PEM files named `<key-id>.pem`; retain old public keys after rotation so old checkpoint signatures remain verifiable.
+The CLI `scripts/checkpoint_promotion_audit.py` runs one operation per invocation and is intended for local cron/systemd; no hidden in-process scheduler or hosted scheduler is started. Install the optional PostgreSQL driver with `pip install -e '.[postgres]'`. Configure `DATABASE_URL`, `PRECOG_CHECKPOINT_DIR`, and `PRECOG_PUBLIC_KEY_DIR`. For creation, also set `PRECOG_PRIVATE_KEY_FILE` and `PRECOG_PUBLIC_KEY_ID`. Set `PRECOG_AUDIT_INCIDENT_LOG` (or pass `--incident-log`) to append alert records to a local JSONL file; if omitted, alerts go to stderr only. Store private keys outside the repository with restrictive filesystem permissions. Public keys are PEM files named `<key-id>.pem`; retain old public keys after rotation so old checkpoint signatures remain verifiable.
 
 Example invocations:
 
 - `python scripts/checkpoint_promotion_audit.py create`
 - `python scripts/checkpoint_promotion_audit.py verify`
 
-The default alert sink writes to stderr. Failures are written to stderr. Local operators may capture stderr using their existing local process supervisor. No webhook, hosted alerting service, or separately administered storage is required. The CLI never creates signing keys or silently rotates them.
+The default alert sink writes to stderr. `LocalAuditIncidentSink` can additionally append each alert to a local JSONL incident journal, using restrictive file permissions and `fsync` before returning. The journal records a unique incident ID, UTC timestamp, alert kind, and message; it makes no network calls. This file is operational evidence, not tamper-proof storage against a host administrator. Local operators may also capture stderr using their existing local process supervisor. No webhook, hosted alerting service, or separately administered storage is required. The CLI never creates signing keys or silently rotates them.
 
 ## Production boundary
 
