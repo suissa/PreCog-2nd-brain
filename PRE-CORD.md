@@ -93,7 +93,9 @@ Candidate providers include OpenRouter, OpenAI-compatible endpoints, Ollama and 
 - restricted data cannot enter unrestricted embeddings, logs or traces.
 
 ## 10. XP.2Flow
-XP.2Flow is the higher-level declarative evolution mechanism. PreCog supplies stages such as experience -> trajectory -> retrieval -> consolidation -> knowledge. Later flows may consume knowledge for capability, behavior, evaluation and new experience.
+XP.2Flow is the higher-level declarative evolution mechanism. PreCog supplies reusable cognitive operations such as experience capture, trajectory reconstruction, retrieval, consolidation, knowledge validation, capability proposal, behavior prediction and outcome evaluation. A flow declares dependencies and semantic contracts; it is not a mandatory linear pipeline. See [docs/XP.2Flow.md](docs/XP.2Flow.md) for the protocol contract, current code mapping and validation suite.
+
+The reference cycle (Experience -> Consolidation -> Knowledge -> Capability -> Behavior -> Experience) does not authorize a flow to skip provenance, privacy, validation, execution authorization or outcome capture. Reordering is valid only where declared dependencies and effects permit it. The general flow runtime is not considered implemented until graph validation, execution, versioned run records and contract tests exist.
 
 ## 11. Research boundary
 Consolidated mechanisms: persistent external memory, episodic/semantic/procedural distinctions, reflection, hybrid retrieval, temporal graphs, append-only experience and human-readable versioning.
