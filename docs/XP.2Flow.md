@@ -138,7 +138,7 @@ The repository already contains components that can serve as step implementation
 | Select next action | `BestNextActionSelector` | Returns a proposal; does not execute it |
 | Capture outcome / evaluate | Experience and evaluation modules | Actual outcome becomes a new immutable Experience |
 
-These are building blocks, not proof of a complete XP.2Flow runtime. The current repository does not yet establish a general declarative flow schema, semantic validator, scheduler/executor, versioned run record, or graph-level reordering proof. Those should be added incrementally rather than implied by documentation.
+These are building blocks, not proof of a complete XP.2Flow runtime. The repository now has an initial deterministic structural validator in `src/precog/xp2flow.py` with contract tests in `tests/test_xp2flow.py`. It checks unique step IDs, dependencies, cycles, optional registered step kinds, deterministic topological order, and undeclared read/write conflicts. It is deliberately not a general YAML schema, scheduler, or executor, and its effect analysis is only as complete as the effects declared by each step.
 
 ## 8. Minimum validation suite for an XP.2Flow runtime
 
@@ -157,8 +157,8 @@ Before calling a flow executable, tests must prove:
 - a run report records flow/step versions, input identities, evidence IDs, decisions, failures, and actual outcomes;
 - privacy classification is enforced across every step boundary.
 
-A useful first milestone is a deterministic, provider-free validator and executor over registered Python step adapters. Add YAML parsing only after the semantic contract and tests are stable.
+The first validator milestone is implemented as a provider-free Python API; its tests cover graph validity, deterministic ordering, safe independence, dependency failures, and effect conflicts. The next milestone is a typed step-contract registry and execution records, followed by a controlled executor over registered Python adapters. Add YAML parsing only after the semantic contract and tests are stable.
 
 ## 9. Decision
 
-XP.2Flow is a coherent fit for PreCog when treated as a **declarative, versioned semantic graph over evidence-preserving cognitive operations**. It should not be described as implemented end-to-end yet. The first implementation milestone is to encode the graph/step contracts and deterministic validator, then adapt existing PreCog components as registered steps. The runtime must enforce PreCog invariants independently of LLM output.
+XP.2Flow is a coherent fit for PreCog when treated as a **declarative, versioned semantic graph over evidence-preserving cognitive operations**. The structural validator is implemented, but XP.2Flow is not implemented end-to-end: typed step contracts, execution, versioned run records, provenance propagation through execution, and recovery behavior remain future work. Existing PreCog components can then be adapted as registered steps. The runtime must enforce PreCog invariants independently of LLM output.
