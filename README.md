@@ -9,6 +9,7 @@ A ideia não é apenas armazenar conversas, resumir textos ou adicionar um banco
 - **PreCog** é a camada cognitiva persistente.
 - **XP.2Flow** é a camada declarativa que pode orquestrar transformações entre experiência, consolidação, conhecimento, capacidade e comportamento. Consulte o [contrato XP.2Flow](docs/XP.2Flow.md), que separa o protocolo conceitual do runtime ainda a implementar.
 - O contrato normativo está em [PRE-CORD.md](PRE-CORD.md); visão técnica em [ARCHITECTURE.md](ARCHITECTURE.md), [TECHNOLOGY.md](TECHNOLOGY.md) e [ROADMAP.md](ROADMAP.md).
+- Para a modelagem de pressentimentos como inferência comportamental verificável, consulte [Precognição como inferência comportamental](docs/PRECOGNITION-BEHAVIORAL-STATES.md): estados propostos, fluxo técnico, avaliação prospectiva e guardrails científicos.
 
 ## 1. A evolução: COG + dreaming + knowledge graph
 
