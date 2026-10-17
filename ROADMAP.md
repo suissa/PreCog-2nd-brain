@@ -61,4 +61,7 @@ Extend the scheduler-neutral checkpoint job with an S3-compatible durable store,
 ## Phase 19 — Checkpoint Monitoring and Reconciliation
 Run scheduled, read-only reconciliation between PostgreSQL and independently stored S3 evidence. Validate the local hash chain, checkpoint signature and key registry, historical hash anchor, checkpoint age, and event lag. Treat normal bounded lag separately from integrity divergence; fail closed for missing/stale evidence, excessive lag, rollback, unknown keys or signature/hash mismatch. Use a separate AWS read-only role and surface failures through GitHub Actions.
 
+## Phase 20 — Actionable Audit Alerts and Incident Lifecycle
+Deduplicate failures into one open GitHub issue, append each recurring failure as a comment, close the incident after a successful verification, and optionally send HTTPS webhook notifications on incident creation/recovery. Keep notification failures non-blocking and maintain separation from promotion/deployment authorization.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.

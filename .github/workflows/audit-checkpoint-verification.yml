@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  issues: write
 
 concurrency:
   group: precog-external-audit-checkpoint-verify
@@ -42,6 +43,7 @@ jobs:
       - name: Install verification dependencies
         run: python -m pip install -e ".[dev,postgres,s3]"
       - name: Reconcile PostgreSQL against external evidence
+        id: reconcile
         env:
           DATABASE_URL: ${{ secrets.PRECOG_DATABASE_URL || secrets.DATABASE_URL }}
           PRECOG_CHECKPOINT_BACKEND: s3
@@ -53,3 +55,73 @@ jobs:
           PRECOG_MAX_CHECKPOINT_AGE_HOURS: ${{ vars.PRECOG_MAX_CHECKPOINT_AGE_HOURS || '36' }}
           PRECOG_MAX_CHECKPOINT_LAG_EVENTS: ${{ vars.PRECOG_MAX_CHECKPOINT_LAG_EVENTS || '1000' }}
         run: python scripts/checkpoint_promotion_audit.py verify --checkpoint-backend s3
+      - name: Track incident and send state-change notification
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_SHA: ${{ github.sha }}
+          ALERT_WEBHOOK_URL: ${{ secrets.PRECOG_AUDIT_ALERT_WEBHOOK_URL }}
+        with:
+          script: |
+            const title = "[Audit Monitor] External checkpoint verification failing";
+            const runUrl = process.env.RUN_URL;
+            const status = process.env.JOB_STATUS;
+            const webhook = process.env.ALERT_WEBHOOK_URL;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner, repo, state: "open", per_page: 100
+            });
+            const incident = issues.find(item => !item.pull_request && item.title === title);
+            let notify = false;
+            let message = "";
+            if (status !== "success") {
+              message = `External audit checkpoint verification FAILED. Run #${process.env.RUN_NUMBER}: ${runUrl}\nCommit: ${process.env.COMMIT_SHA}\nInspect the workflow logs for the failing check. This read-only monitor does not authorize promotion or execution.`;
+              if (incident) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: incident.number,
+                  body: `Recurring failure recorded at ${new Date().toISOString()}.\n\n${message}`
+                });
+                core.info(`Updated existing incident #${incident.number}; no duplicate issue created.`);
+              } else {
+                const created = await github.rest.issues.create({
+                  owner, repo, title,
+                  body: `## External audit checkpoint verification is failing\n\n${message}\n\nThis issue is automatically updated by the scheduled verification workflow and closed after a successful verification run.\n`
+                });
+                core.info(`Opened incident #${created.data.number}.`);
+                notify = true;
+              }
+            } else if (incident) {
+              message = `External audit checkpoint verification RECOVERED. Run #${process.env.RUN_NUMBER}: ${runUrl}\nThe latest verification completed successfully; closing incident #${incident.number}.`;
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: incident.number,
+                body: `Recovery confirmed at ${new Date().toISOString()}.\n\n${message}`
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: incident.number,
+                state: "closed", state_reason: "completed"
+              });
+              core.info(`Closed recovered incident #${incident.number}.`);
+              notify = true;
+            } else {
+              core.info("Verification succeeded and no open incident exists.");
+            }
+            if (webhook && notify) {
+              try {
+                const response = await fetch(webhook, {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ text: message })
+                });
+                if (!response.ok) {
+                  core.warning(`External alert webhook returned HTTP ${response.status}; GitHub incident tracking remains active.`);
+                }
+              } catch (error) {
+                core.warning(`External alert webhook delivery failed; GitHub incident tracking remains active: ${error.message}`);
+              }
+            } else if (!webhook && notify) {
+              core.info("No PRECOG_AUDIT_ALERT_WEBHOOK_URL configured; GitHub issue tracking remains active.");
+            }
