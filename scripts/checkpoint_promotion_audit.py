@@ -21,6 +21,12 @@ def main() -> int:
     parser.add_argument("--public-key-id", default=os.getenv("PRECOG_PUBLIC_KEY_ID"))
     parser.add_argument("--database-url", default=os.getenv("DATABASE_URL"))
     parser.add_argument(
+        "--max-checkpoint-age-seconds",
+        type=float,
+        default=os.getenv("PRECOG_MAX_CHECKPOINT_AGE_SECONDS"),
+        help="fail verify if the latest signed checkpoint is older than this many seconds",
+    )
+    parser.add_argument(
         "--incident-log",
         default=os.getenv("PRECOG_AUDIT_INCIDENT_LOG"),
         help="local incident journal (default: PRECOG_AUDIT_INCIDENT_LOG environment variable)",
@@ -36,6 +42,8 @@ def main() -> int:
         required["private key file"] = args.private_key_file
         required["public key ID"] = args.public_key_id
     missing = [name for name, value in required.items() if not value]
+    if args.max_checkpoint_age_seconds is not None and args.max_checkpoint_age_seconds < 0:
+        parser.error("--max-checkpoint-age-seconds must be non-negative")
     if missing:
         parser.error("missing configuration: " + ", ".join(missing))
 
@@ -69,7 +77,7 @@ def main() -> int:
             output = job.create(private_key=private_key, public_key_id=args.public_key_id)
             print(f"Checkpoint written: {output}")
         else:
-            result = job.reconcile_latest()
+            result = job.reconcile_latest(max_age_seconds=args.max_checkpoint_age_seconds)
             print(
                 f"Checkpoint valid: sequence={result.checkpoint_sequence}, "
                 f"current_sequence={result.current_sequence}, "
