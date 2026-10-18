@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -118,3 +119,66 @@ def test_registry_rejects_unknown_and_unsafe_key_ids(tmp_path):
         registry.load("../outside")
     with pytest.raises(ValueError, match="no trusted public key"):
         registry.load("retired-key")
+
+
+
+def test_reconcile_accepts_fresh_checkpoint_and_rejects_stale_checkpoint(tmp_path):
+    private = Ed25519PrivateKey.generate()
+    _, public_dir = write_keys(tmp_path, "key-1", private)
+    now = datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc)
+    fresh = create_checkpoint(
+        FakeLog().verify_integrity(), sequence=3, private_key=private,
+        public_key_id="key-1", created_at=now - timedelta(seconds=30),
+    )
+    store = FileCheckpointStore(tmp_path / "checkpoints")
+    store.write(fresh)
+    alerts = Alerts()
+    job = CheckpointJob(
+        audit_log=FakeLog(), checkpoint_store=store,
+        public_keys=PublicKeyRegistry(public_dir), alert_sink=alerts,
+    )
+
+    assert job.reconcile_latest(max_age_seconds=60, now=now).valid
+    with pytest.raises(RuntimeError, match="checkpoint is stale"):
+        job.reconcile_latest(max_age_seconds=10, now=now)
+    assert len(alerts.messages) == 1
+
+
+def test_reconcile_rejects_future_or_timezone_naive_checkpoint_time(tmp_path):
+    private = Ed25519PrivateKey.generate()
+    _, public_dir = write_keys(tmp_path, "key-1", private)
+    now = datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc)
+    future = create_checkpoint(
+        FakeLog().verify_integrity(), sequence=3, private_key=private,
+        public_key_id="key-1", created_at=now + timedelta(seconds=1),
+    )
+    store = FileCheckpointStore(tmp_path / "checkpoints")
+    store.write(future)
+    alerts = Alerts()
+    job = CheckpointJob(
+        audit_log=FakeLog(), checkpoint_store=store,
+        public_keys=PublicKeyRegistry(public_dir), alert_sink=alerts,
+    )
+    with pytest.raises(RuntimeError, match="timestamp is in the future"):
+        job.reconcile_latest(max_age_seconds=60, now=now)
+    assert len(alerts.messages) == 1
+
+
+def test_store_retains_fresh_attestations_for_the_same_audit_head(tmp_path):
+    private = Ed25519PrivateKey.generate()
+    report = FakeLog().verify_integrity()
+    first_time = datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc)
+    first = create_checkpoint(
+        report, sequence=3, private_key=private, public_key_id="key-1",
+        created_at=first_time,
+    )
+    second = create_checkpoint(
+        report, sequence=3, private_key=private, public_key_id="key-1",
+        created_at=first_time + timedelta(minutes=1),
+    )
+    store = FileCheckpointStore(tmp_path / "checkpoints")
+    first_path = store.write(first)
+    second_path = store.write(second)
+    assert first_path != second_path
+    assert len(list((tmp_path / "checkpoints").glob("checkpoint-*.json"))) == 2
+    assert store.latest() == second
