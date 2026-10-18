@@ -54,4 +54,7 @@ Sign verified audit-chain heads with Ed25519, export portable JSON checkpoints t
 ## Phase 17 — Local Checkpoint Operations
 Provide a one-shot job suitable for local cron/systemd, an atomic no-overwrite filesystem checkpoint store, trusted public-key lookup by key ID, pre/post chain verification, stderr alerts, and an optional append-only local JSONL incident journal. Reconciliation must fail closed for missing checkpoints, unknown keys, invalid signatures or divergent history. All checkpoint operations work without cloud accounts, object storage, hosted schedulers, webhooks, or other external services. Key rotation retains old public keys for historical checkpoint verification.
 
+## Phase 18 — Checkpoint Freshness Monitoring
+Allow periodic verification to enforce a configured maximum age for the latest signed checkpoint, reject future or timezone-naive timestamps, and alert on stale evidence. Retain immutable re-attestations of an unchanged audit head so scheduled checkpoint creation can refresh freshness without overwriting historical files. The freshness threshold is explicit and configurable; no threshold means integrity reconciliation without an age policy.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
