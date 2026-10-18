@@ -11,6 +11,8 @@ A ideia não é apenas armazenar conversas, resumir textos ou adicionar um banco
 - O contrato normativo está em [PRE-CORD.md](PRE-CORD.md); visão técnica em [ARCHITECTURE.md](ARCHITECTURE.md), [TECHNOLOGY.md](TECHNOLOGY.md) e [ROADMAP.md](ROADMAP.md).
 - Para a modelagem de pressentimentos como inferência comportamental verificável, consulte [Precognição como inferência comportamental](docs/PRECOGNITION-BEHAVIORAL-STATES.md): estados propostos, fluxo técnico, avaliação prospectiva e guardrails científicos.
 
+- Operações de checkpoints assinados: [guia de verificação local e frescor](docs/AUDIT-CHECKPOINT-OPERATIONS.md).
+
 ## 1. A evolução: COG + dreaming + knowledge graph
 
 PreCog parte de mecanismos conhecidos em arquiteturas cognitivas e sistemas de memória para agentes — memória episódica/semântica, recuperação, reflexão, consolidação offline e relações entre fatos — e os combina sob contratos explícitos de proveniência, temporalidade, validação e evolução.

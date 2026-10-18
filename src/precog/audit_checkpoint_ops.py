@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -57,7 +59,10 @@ class FileCheckpointStore:
 
     def write(self, checkpoint: PromotionAuditCheckpoint) -> Path:
         self.directory.mkdir(parents=True, exist_ok=True)
-        name = f"checkpoint-{checkpoint.sequence:020d}-{checkpoint.head_hash}.json"
+        # Include the signed payload identity so a fresh attestation of an unchanged
+        # audit head can be retained without overwriting its earlier checkpoint.
+        digest = hashlib.sha256(checkpoint.to_json().encode("utf-8")).hexdigest()[:16]
+        name = f"checkpoint-{checkpoint.sequence:020d}-{checkpoint.head_hash}-{digest}.json"
         destination = self.directory / name
         temporary_name: str | None = None
         try:
@@ -163,11 +168,36 @@ class CheckpointJob:
             self.alert_sink.alert(f"checkpoint creation failed: {error}")
             raise
 
-    def reconcile_latest(self) -> PromotionAuditReconciliation:
+    def reconcile_latest(
+        self,
+        *,
+        max_age_seconds: float | None = None,
+        now: datetime | None = None,
+    ) -> PromotionAuditReconciliation:
         try:
             checkpoint = self.checkpoint_store.latest()
             if checkpoint is None:
                 raise RuntimeError("no external audit checkpoint is available")
+            if max_age_seconds is not None:
+                if max_age_seconds < 0:
+                    raise ValueError("max_age_seconds must be non-negative")
+                try:
+                    created_at = datetime.fromisoformat(checkpoint.created_at)
+                except ValueError as error:
+                    raise RuntimeError("checkpoint timestamp is invalid") from error
+                if created_at.tzinfo is None or created_at.utcoffset() is None:
+                    raise RuntimeError("checkpoint timestamp must include a timezone")
+                current_time = now or datetime.now(timezone.utc)
+                if current_time.tzinfo is None or current_time.utcoffset() is None:
+                    raise ValueError("now must be timezone-aware")
+                age_seconds = (current_time.astimezone(timezone.utc) - created_at.astimezone(timezone.utc)).total_seconds()
+                if age_seconds < 0:
+                    raise RuntimeError("checkpoint timestamp is in the future")
+                if age_seconds > max_age_seconds:
+                    raise RuntimeError(
+                        f"latest checkpoint is stale: age {age_seconds:.0f}s exceeds "
+                        f"configured maximum {max_age_seconds:.0f}s"
+                    )
             public_key = self.public_keys.load(checkpoint.public_key_id)
             result = self.audit_log.reconcile_checkpoint(checkpoint, public_key=public_key)
             if not result.valid:
