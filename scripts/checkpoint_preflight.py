@@ -41,11 +41,7 @@ def read_environment_file(path: Path) -> dict[str, str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, help="read configuration without executing it")
-    parser.add_argument(
-        "--print-interpreter",
-        action="store_true",
-        help="print the configured interpreter path only (for installer bootstrap)",
-    )
+    parser.add_argument("--print-interpreter", action="store_true", help="print configured interpreter path only")
     args = parser.parse_args()
 
     if args.env_file is not None:
@@ -65,15 +61,10 @@ def main() -> int:
         return fail("--print-interpreter requires --env-file")
 
     required = (
-        "PRECOG_REPO_DIR",
-        "PRECOG_PYTHON",
-        "DATABASE_URL",
-        "PRECOG_CHECKPOINT_DIR",
-        "PRECOG_PUBLIC_KEY_DIR",
-        "PRECOG_PRIVATE_KEY_FILE",
-        "PRECOG_PUBLIC_KEY_ID",
-        "PRECOG_AUDIT_INCIDENT_LOG",
-        "PRECOG_MAX_CHECKPOINT_AGE_SECONDS",
+        "PRECOG_REPO_DIR", "PRECOG_PYTHON", "DATABASE_URL",
+        "PRECOG_CHECKPOINT_DIR", "PRECOG_PUBLIC_KEY_DIR",
+        "PRECOG_PRIVATE_KEY_FILE", "PRECOG_PUBLIC_KEY_ID",
+        "PRECOG_AUDIT_INCIDENT_LOG", "PRECOG_MAX_CHECKPOINT_AGE_SECONDS",
     )
     missing = [name for name in required if not os.getenv(name)]
     if missing:
@@ -143,7 +134,6 @@ def main() -> int:
     except ImportError:
         return fail("PostgreSQL adapter missing; install project extra with pip install '.[postgres]'")
     except Exception as error:
-        # Never print connection exception text; it may contain the database URL.
         return fail(f"PostgreSQL connection probe failed ({type(error).__name__})")
 
     print("PRECOG PREFLIGHT OK: configuration, key pair, writable paths, and PostgreSQL connectivity validated.")
