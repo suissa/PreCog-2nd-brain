@@ -21,8 +21,8 @@ command -v systemctl >/dev/null || {
   exit 1
 }
 
-config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/precog"
-unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+config_dir="$HOME/.config/precog"
+unit_dir="$HOME/.config/systemd/user"
 mkdir -p "$config_dir" "$unit_dir"
 chmod 700 "$config_dir"
 
