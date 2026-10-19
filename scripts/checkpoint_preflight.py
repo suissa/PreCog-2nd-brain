@@ -52,7 +52,7 @@ def main() -> int:
         try:
             configured = read_environment_file(args.env_file)
         except (OSError, ValueError) as error:
-            return fail(f"cannot read configuration file ({type(error).__name__})")
+            return fail(f"cannot read configuration file: {error}")
         if args.print_interpreter:
             interpreter_value = configured.get("PRECOG_PYTHON", "")
             interpreter = Path(interpreter_value).expanduser()
