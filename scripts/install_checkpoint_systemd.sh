@@ -12,6 +12,10 @@ repo_dir="$(cd "$1" && pwd)"
   echo "Could not find scripts/checkpoint_promotion_audit.py under: $repo_dir" >&2
   exit 1
 }
+[[ -f "$repo_dir/scripts/checkpoint_preflight.py" ]] || {
+  echo "Could not find scripts/checkpoint_preflight.py under: $repo_dir" >&2
+  exit 1
+}
 [[ "$repo_dir" != *$'\n'* ]] || {
   echo "Repository path must not contain newline characters." >&2
   exit 1
@@ -27,6 +31,7 @@ mkdir -p "$config_dir" "$unit_dir"
 chmod 700 "$config_dir"
 
 env_file="$config_dir/checkpoint.env"
+created_config=0
 if [[ ! -e "$env_file" ]]; then
   umask 077
   cat > "$env_file" <<EOF
@@ -41,6 +46,7 @@ PRECOG_AUDIT_INCIDENT_LOG=$HOME/.local/state/precog/audit-incidents.jsonl
 PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600
 EOF
   chmod 600 "$env_file"
+  created_config=1
   echo "Created configuration template: $env_file"
 else
   echo "Preserving existing configuration: $env_file"
@@ -99,20 +105,36 @@ WantedBy=timers.target
 EOF
 
 systemctl --user daemon-reload
+
+if [[ "$created_config" -eq 1 ]]; then
+  cat <<EOF
+Units installed, but timers were NOT enabled because a new template needs configuration.
+
+Next:
+  1. Edit $env_file; configure DATABASE_URL and valid Ed25519 key paths.
+  2. Ensure PRECOG_PYTHON points to the project environment with the PostgreSQL extra.
+  3. Re-run this installer. It will run the preflight and enable timers only on success.
+
+No timers were enabled. The installer does not enable lingering or change host-wide policy.
+EOF
+  exit 0
+fi
+
+# The environment file is operator-owned. Source it only for this preflight process;
+# never print its values, especially DATABASE_URL.
+if ! /usr/bin/bash -c 'set -a; source "$1"; set +a; cd "$PRECOG_REPO_DIR"; exec "$PRECOG_PYTHON" scripts/checkpoint_preflight.py' _ "$env_file"; then
+  echo "Preflight failed; timers were not enabled. Fix $env_file and re-run the installer." >&2
+  exit 1
+fi
+
 systemctl --user enable --now precog-checkpoint-create.timer precog-checkpoint-verify.timer
 
 cat <<EOF
-Timers installed and enabled for the current user.
+Preflight passed. Timers installed and enabled for the current user.
 
-Next:
-  1. Edit $env_file and set DATABASE_URL and valid key/checkpoint paths.
-  2. Ensure Python dependencies are installed in the execution environment.
-  3. Test manually:
-     systemctl --user start precog-checkpoint-create.service
-     systemctl --user start precog-checkpoint-verify.service
-  4. Inspect:
-     systemctl --user list-timers 'precog-checkpoint-*'
-     journalctl --user -u precog-checkpoint-create.service -u precog-checkpoint-verify.service
+Inspect:
+  systemctl --user list-timers 'precog-checkpoint-*'
+  journalctl --user -u precog-checkpoint-create.service -u precog-checkpoint-verify.service
 
 The installer does not enable lingering. Timers may stop running after logout unless user lingering is already enabled.
 EOF
