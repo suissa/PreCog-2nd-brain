@@ -15,7 +15,7 @@ The installer writes units under `~/.config/systemd/user`, creates a private con
 - `precog-checkpoint-create.timer`: creates a signed checkpoint hourly.
 - `precog-checkpoint-verify.timer`: verifies integrity and freshness every 15 minutes.
 
-Edit the environment file before the first run. Set `DATABASE_URL`, the checkpoint and trusted public-key directories, the private signing key path, and `PRECOG_PUBLIC_KEY_ID`. The generated defaults are examples, not working credentials or provisioned keys. Install the project and its PostgreSQL extra in the Python environment used by the service.
+Edit the environment file before the first run. Set `DATABASE_URL`, the checkpoint and trusted public-key directories, the private signing key path, and `PRECOG_PUBLIC_KEY_ID`. The generated defaults are examples, not working credentials or provisioned keys. Install the project and its PostgreSQL extra in the Python environment used by the service. `PRECOG_PYTHON` selects the interpreter (default template: `/usr/bin/python3`); set it to the absolute path of the project's virtual-environment interpreter if dependencies are installed there.
 
 The configured `PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600` is a 36-hour example threshold. Choose a value that matches your schedule and downtime tolerance. The verification timer's failures are visible in the systemd journal; when configured, the application also appends incidents to `PRECOG_AUDIT_INCIDENT_LOG`. A non-zero service result should be connected to an alerting mechanism appropriate to the host.
 
