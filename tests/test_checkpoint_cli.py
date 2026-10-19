@@ -80,7 +80,7 @@ def test_checkpoint_preflight_reads_environment_file_without_executing_it(tmp_pa
         f'PRECOG_PYTHON="{sys.executable}"\n'
         f'DATABASE_URL="postgresql://user:password@localhost/db"\n'
         f'PRECOG_REPO_DIR="{Path.cwd()}"\n'
-        f'IGNORED=$(touch {marker})\n',
+        f'IGNORED="$(touch {marker})"\n',
         encoding="utf-8",
     )
     result = subprocess.run(
