@@ -2,7 +2,35 @@
 
 PreCog can create and verify signed promotion-audit checkpoints without cloud services.
 
-## Configure
+## Configure and install the local scheduler
+
+From the repository root, install the user-level `systemd` timers:
+
+```sh
+bash scripts/install_checkpoint_systemd.sh "$PWD"
+```
+
+The installer writes units under `~/.config/systemd/user`, creates a private configuration template at `~/.config/precog/checkpoint.env` (mode `0600`), and enables two timers:
+
+- `precog-checkpoint-create.timer`: creates a signed checkpoint hourly.
+- `precog-checkpoint-verify.timer`: verifies integrity and freshness every 15 minutes.
+
+Edit the environment file before the first run. Set `DATABASE_URL`, the checkpoint and trusted public-key directories, the private signing key path, and `PRECOG_PUBLIC_KEY_ID`. The generated defaults are examples, not working credentials or provisioned keys. Install the project and its PostgreSQL extra in the Python environment used by the service.
+
+The configured `PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600` is a 36-hour example threshold. Choose a value that matches your schedule and downtime tolerance. The verification timer's failures are visible in the systemd journal; when configured, the application also appends incidents to `PRECOG_AUDIT_INCIDENT_LOG`. A non-zero service result should be connected to an alerting mechanism appropriate to the host.
+
+Check the timers and logs:
+
+```sh
+systemctl --user list-timers 'precog-checkpoint-*'
+systemctl --user start precog-checkpoint-create.service
+systemctl --user start precog-checkpoint-verify.service
+journalctl --user -u precog-checkpoint-create.service -u precog-checkpoint-verify.service
+```
+
+The installer does not enable user lingering. On a machine where the user is not continuously logged in, decide explicitly whether to enable it with the administrator's policy. User-level units are not an independent security boundary against compromise of that user's account or host.
+
+## Configure manually
 
 Set these environment variables for the one-shot command:
 
@@ -16,25 +44,17 @@ Set these environment variables for the one-shot command:
 
 Keep the private signing key outside the repository. The checkpoint directory and incident journal on the same host are not independent evidence against a host/root compromise.
 
-## Run manually
-
-Create or refresh a signed checkpoint, even if the audit head has not changed:
+Create or refresh a signed checkpoint:
 
 ```sh
 python scripts/checkpoint_promotion_audit.py create
 ```
 
-Verify signature, chain reconciliation, and (when configured) freshness:
+Verify signature, chain reconciliation, and configured freshness:
 
 ```sh
 PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600 \
   python scripts/checkpoint_promotion_audit.py verify
 ```
 
-The example threshold is 36 hours. Choose a threshold that matches the checkpoint creation schedule and expected downtime. Verification exits non-zero and emits an alert for missing, invalid, divergent, future-dated, or stale checkpoints.
-
-## Scheduling
-
-Run `create` on a schedule appropriate to the audit risk (for example, hourly), and run `verify` more frequently (for example, every 15 minutes). Configure the same maximum-age threshold for verification. A scheduler should alert on non-zero exit status; the local incident journal is supplementary and not tamper-proof.
-
-The filesystem store publishes each checkpoint atomically and never overwrites a prior file. Repeated attestations of the same sequence/head use a digest of the signed checkpoint payload in the filename, allowing a newer timestamp to be retained while preserving history.
+Verification exits non-zero and emits an alert for missing, invalid, divergent, future-dated, or stale checkpoints. The filesystem store publishes each checkpoint atomically and never overwrites a prior file. Repeated attestations of the same sequence/head use a digest of the signed payload in the filename, preserving history.
