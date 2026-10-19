@@ -124,7 +124,7 @@ EOF
   exit 0
 fi
 
-# Parse as data, never source the operator-owned file as executable shell code.
+# Parse the operator-owned configuration as data, not executable shell code.
 configured_python="$(python3 "$repo_dir/scripts/checkpoint_preflight.py" --env-file "$env_file" --print-interpreter)" || {
   echo "Could not read PRECOG_PYTHON from $env_file; timers were not enabled." >&2
   exit 1
