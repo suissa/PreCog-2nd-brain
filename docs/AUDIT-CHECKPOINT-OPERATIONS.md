@@ -2,24 +2,39 @@
 
 PreCog can create and verify signed promotion-audit checkpoints without cloud services.
 
-## Configure and install the local scheduler
+## Install safely
 
-From the repository root, install the user-level `systemd` timers:
+From the repository root:
 
 ```sh
 bash scripts/install_checkpoint_systemd.sh "$PWD"
 ```
 
-The installer writes units under `~/.config/systemd/user`, creates a private configuration template at `~/.config/precog/checkpoint.env` (mode `0600`), and enables two timers:
+The installer writes user-level units under `~/.config/systemd/user` and creates `~/.config/precog/checkpoint.env` with mode `0600`. If it creates a new template, it installs the units but deliberately does not enable timers. Fill in the configuration and run the installer again; it runs preflight validation and enables timers only if every check passes.
+
+Required settings include `DATABASE_URL`, checkpoint and trusted public-key directories, the private signing key path, `PRECOG_PUBLIC_KEY_ID`, and `PRECOG_PYTHON`. The configured interpreter must be the absolute path to the project's Python environment with the PostgreSQL extra installed. The template's `/usr/bin/python3` is only a default, not a guarantee that dependencies are available.
+
+## Preflight checks
+
+`scripts/checkpoint_preflight.py` checks that the repository and interpreter exist, configuration values are present, the freshness threshold is positive, checkpoint and incident-log paths are writable, the configured Ed25519 private/public keys are readable and match, the private key is not group/world accessible on POSIX, and PostgreSQL accepts a short `SELECT 1` connection probe. Connection exceptions are deliberately summarized by type so credentials in a database URL are not printed.
+
+Run the same check manually after changing configuration:
+
+```sh
+set -a
+source "$HOME/.config/precog/checkpoint.env"
+set +a
+"$PRECOG_PYTHON" "$PRECOG_REPO_DIR/scripts/checkpoint_preflight.py"
+```
+
+Preflight validates readiness but does not create a checkpoint or prove that audit history is consistent; the scheduled `create` and `verify` operations remain responsible for those checks.
+
+## Schedule and inspect
+
+After preflight succeeds, the installer enables two timers:
 
 - `precog-checkpoint-create.timer`: creates a signed checkpoint hourly.
 - `precog-checkpoint-verify.timer`: verifies integrity and freshness every 15 minutes.
-
-Edit the environment file before the first run. Set `DATABASE_URL`, the checkpoint and trusted public-key directories, the private signing key path, and `PRECOG_PUBLIC_KEY_ID`. The generated defaults are examples, not working credentials or provisioned keys. Install the project and its PostgreSQL extra in the Python environment used by the service. `PRECOG_PYTHON` selects the interpreter (default template: `/usr/bin/python3`); set it to the absolute path of the project's virtual-environment interpreter if dependencies are installed there.
-
-The configured `PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600` is a 36-hour example threshold. Choose a value that matches your schedule and downtime tolerance. The verification timer's failures are visible in the systemd journal; when configured, the application also appends incidents to `PRECOG_AUDIT_INCIDENT_LOG`. A non-zero service result should be connected to an alerting mechanism appropriate to the host.
-
-Check the timers and logs:
 
 ```sh
 systemctl --user list-timers 'precog-checkpoint-*'
@@ -28,7 +43,9 @@ systemctl --user start precog-checkpoint-verify.service
 journalctl --user -u precog-checkpoint-create.service -u precog-checkpoint-verify.service
 ```
 
-The installer does not enable user lingering. On a machine where the user is not continuously logged in, decide explicitly whether to enable it with the administrator's policy. User-level units are not an independent security boundary against compromise of that user's account or host.
+The default `PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600` is a 36-hour example threshold. Choose a value appropriate to the schedule and downtime tolerance. The optional `PRECOG_AUDIT_INCIDENT_LOG` records local JSONL incidents; non-zero service results remain visible in the systemd journal.
+
+The installer does not enable user lingering or modify host-wide policy. On a machine where the user is not continuously logged in, decide explicitly whether lingering is permitted. User-level units are not an independent security boundary against compromise of the account or host.
 
 ## Configure manually
 
@@ -57,4 +74,4 @@ PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600 \
   python scripts/checkpoint_promotion_audit.py verify
 ```
 
-Verification exits non-zero and emits an alert for missing, invalid, divergent, future-dated, or stale checkpoints. The filesystem store publishes each checkpoint atomically and never overwrites a prior file. Repeated attestations of the same sequence/head use a digest of the signed payload in the filename, preserving history.
+Verification exits non-zero and emits an alert for missing, invalid, divergent, future-dated, or stale checkpoints. The filesystem store publishes each checkpoint atomically and never overwrites a prior file.
