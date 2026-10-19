@@ -1,4 +1,3 @@
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,3 +32,7 @@ def test_systemd_installer_mentions_both_timers_and_keeps_existing_config(tmp_pa
     assert 'if [[ ! -e "$env_file" ]]' in script
     assert "chmod 600" in script
     assert "lingering" in script
+    assert "PRECOG_PYTHON=/usr/bin/python3" in script
+    assert 'exec "${PRECOG_PYTHON:-python3}"' in script
+    syntax = subprocess.run(["bash", "-n", "scripts/install_checkpoint_systemd.sh"], capture_output=True, text=True)
+    assert syntax.returncode == 0, syntax.stderr
