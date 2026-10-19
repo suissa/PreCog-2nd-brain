@@ -10,9 +10,11 @@ From the repository root:
 bash scripts/install_checkpoint_systemd.sh "$PWD"
 ```
 
-The installer writes user-level units under `~/.config/systemd/user` and creates `~/.config/precog/checkpoint.env` with mode `0600`. If it creates a new template, it installs the units but deliberately does not enable timers. Fill in the configuration and run the installer again; it runs preflight validation and enables timers only if every check passes.
+The installer writes user-level units under `~/.config/systemd/user` and creates `~/.config/precog/checkpoint.env` with mode `0600`. If it creates a new template, it installs the units but deliberately does not enable timers. Fill in the configuration and run the installer again; it validates the configuration and enables timers only if every check passes.
 
-Required settings include `DATABASE_URL`, checkpoint and trusted public-key directories, the private signing key path, `PRECOG_PUBLIC_KEY_ID`, and `PRECOG_PYTHON`. The configured interpreter must be the absolute path to the project's Python environment with the PostgreSQL extra installed. The template's `/usr/bin/python3` is only a default, not a guarantee that dependencies are available.
+The environment file is parsed as data, not sourced as shell code. Use one `KEY=VALUE` assignment per line; quote values containing spaces. Do not use shell substitutions or command execution in the file. The systemd service reads the same file as environment assignments.
+
+Required settings include `DATABASE_URL`, checkpoint and trusted public-key directories, the private signing key path, `PRECOG_PUBLIC_KEY_ID`, and `PRECOG_PYTHON`. The configured interpreter must be an absolute path to the project's Python environment with the PostgreSQL extra installed. The template's `/usr/bin/python3` is only a default, not a guarantee that dependencies are available.
 
 ## Preflight checks
 
@@ -21,10 +23,7 @@ Required settings include `DATABASE_URL`, checkpoint and trusted public-key dire
 Run the same check manually after changing configuration:
 
 ```sh
-set -a
-source "$HOME/.config/precog/checkpoint.env"
-set +a
-"$PRECOG_PYTHON" "$PRECOG_REPO_DIR/scripts/checkpoint_preflight.py"
+"$PRECOG_PYTHON" "$PRECOG_REPO_DIR/scripts/checkpoint_preflight.py" --env-file "$HOME/.config/precog/checkpoint.env"
 ```
 
 Preflight validates readiness but does not create a checkpoint or prove that audit history is consistent; the scheduled `create` and `verify` operations remain responsible for those checks.
