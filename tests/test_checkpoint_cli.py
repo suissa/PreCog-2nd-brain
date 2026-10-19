@@ -38,6 +38,7 @@ def test_systemd_installer_requires_preflight_before_activation() -> None:
     assert "checkpoint_preflight.py" in script
     assert 'if [[ "$created_config" -eq 1 ]]' in script
     assert "enable --now" in script
+    assert "source " not in script
     syntax = subprocess.run(
         ["bash", "-n", "scripts/install_checkpoint_systemd.sh"],
         capture_output=True,
@@ -70,6 +71,44 @@ def test_checkpoint_preflight_fails_closed_on_missing_configuration() -> None:
     assert "missing configuration values" in result.stderr
     assert "DATABASE_URL" in result.stderr
     assert "PRECOG PREFLIGHT OK" not in result.stdout
+
+
+def test_checkpoint_preflight_reads_environment_file_without_executing_it(tmp_path: Path) -> None:
+    marker = tmp_path / "should-not-exist"
+    env_file = tmp_path / "checkpoint.env"
+    env_file.write_text(
+        f'PRECOG_PYTHON="{sys.executable}"\n'
+        f'DATABASE_URL="postgresql://user:password@localhost/db"\n'
+        f'PRECOG_REPO_DIR="{Path.cwd()}"\n'
+        f'IGNORED=$(touch {marker})\n',
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/checkpoint_preflight.py",
+            "--env-file",
+            str(env_file),
+            "--print-interpreter",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == sys.executable
+    assert not marker.exists()
+
+
+def test_checkpoint_preflight_rejects_shell_syntax_in_environment_file(tmp_path: Path) -> None:
+    env_file = tmp_path / "checkpoint.env"
+    env_file.write_text("PRECOG_PYTHON=/usr/bin/python3\n$(touch /tmp/precog-env-execution)\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "scripts/checkpoint_preflight.py", "--env-file", str(env_file), "--print-interpreter"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "invalid environment variable name" in result.stderr or "expected one KEY=VALUE assignment" in result.stderr
 
 
 def test_checkpoint_preflight_does_not_print_database_url_on_failure() -> None:
