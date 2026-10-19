@@ -136,3 +136,111 @@ def test_checkpoint_preflight_does_not_print_database_url_on_failure() -> None:
     assert "secret-password" not in result.stderr
     assert "secret-user" not in result.stderr
     assert "PRECOG PREFLIGHT FAILED" in result.stderr
+
+
+
+def _write_installer_fakes(tmp_path: Path, preflight_exit: int) -> tuple[Path, Path, Path]:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    calls = tmp_path / "systemctl-calls.log"
+    systemctl = fake_bin / "systemctl"
+    systemctl.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> {calls}\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    systemctl.chmod(0o755)
+    configured_python = tmp_path / "configured-python"
+    configured_python.write_text(f"#!/bin/sh\nexit {preflight_exit}\n", encoding="utf-8")
+    configured_python.chmod(0o755)
+    return fake_bin, calls, configured_python
+
+
+def test_installer_does_not_enable_timers_when_it_creates_template(tmp_path: Path) -> None:
+    fake_bin, calls, _ = _write_installer_fakes(tmp_path, 0)
+    home = tmp_path / "home"
+    home.mkdir()
+    env = os.environ.copy()
+    env.update({"HOME": str(home), "PATH": f"{fake_bin}:{os.environ['PATH']}"})
+    result = subprocess.run(
+        ["bash", "scripts/install_checkpoint_systemd.sh", str(Path.cwd())],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "NOT enabled" in result.stdout
+    assert calls.exists()
+    calls_text = calls.read_text(encoding="utf-8")
+    assert "daemon-reload" in calls_text
+    assert "enable --now" not in calls_text
+    config = home / ".config/precog/checkpoint.env"
+    assert config.exists()
+    assert config.stat().st_mode & 0o777 == 0o600
+
+
+def test_installer_fails_closed_when_preflight_fails(tmp_path: Path) -> None:
+    fake_bin, calls, configured_python = _write_installer_fakes(tmp_path, 1)
+    home = tmp_path / "home"
+    config_dir = home / ".config/precog"
+    config_dir.mkdir(parents=True)
+    env_file = config_dir / "checkpoint.env"
+    env_file.write_text(
+        f"PRECOG_REPO_DIR={Path.cwd()}\n"
+        f"PRECOG_PYTHON={configured_python}\n"
+        "DATABASE_URL=postgresql://user:password@localhost/db\n"
+        "PRECOG_CHECKPOINT_DIR=/tmp/precog-test-checkpoints\n"
+        "PRECOG_PUBLIC_KEY_DIR=/tmp/precog-test-public-keys\n"
+        "PRECOG_PRIVATE_KEY_FILE=/tmp/precog-test-private.pem\n"
+        "PRECOG_PUBLIC_KEY_ID=key-1\n"
+        "PRECOG_AUDIT_INCIDENT_LOG=/tmp/precog-test-incidents/audit.jsonl\n"
+        "PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env.update({"HOME": str(home), "PATH": f"{fake_bin}:{os.environ['PATH']}"})
+    result = subprocess.run(
+        ["bash", "scripts/install_checkpoint_systemd.sh", str(Path.cwd())],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "Preflight failed" in result.stderr
+    calls_text = calls.read_text(encoding="utf-8")
+    assert "daemon-reload" in calls_text
+    assert "enable --now" not in calls_text
+
+
+def test_installer_enables_timers_only_after_preflight_passes(tmp_path: Path) -> None:
+    fake_bin, calls, configured_python = _write_installer_fakes(tmp_path, 0)
+    home = tmp_path / "home"
+    config_dir = home / ".config/precog"
+    config_dir.mkdir(parents=True)
+    env_file = config_dir / "checkpoint.env"
+    env_file.write_text(
+        f"PRECOG_REPO_DIR={Path.cwd()}\n"
+        f"PRECOG_PYTHON={configured_python}\n"
+        "DATABASE_URL=postgresql://user:password@localhost/db\n"
+        "PRECOG_CHECKPOINT_DIR=/tmp/precog-test-checkpoints\n"
+        "PRECOG_PUBLIC_KEY_DIR=/tmp/precog-test-public-keys\n"
+        "PRECOG_PRIVATE_KEY_FILE=/tmp/precog-test-private.pem\n"
+        "PRECOG_PUBLIC_KEY_ID=key-1\n"
+        "PRECOG_AUDIT_INCIDENT_LOG=/tmp/precog-test-incidents/audit.jsonl\n"
+        "PRECOG_MAX_CHECKPOINT_AGE_SECONDS=129600\n",
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env.update({"HOME": str(home), "PATH": f"{fake_bin}:{os.environ['PATH']}"})
+    result = subprocess.run(
+        ["bash", "scripts/install_checkpoint_systemd.sh", str(Path.cwd())],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Preflight passed" in result.stdout
+    calls_text = calls.read_text(encoding="utf-8")
+    assert "daemon-reload" in calls_text
+    assert "enable --now precog-checkpoint-create.timer precog-checkpoint-verify.timer" in calls_text
