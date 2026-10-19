@@ -2,8 +2,10 @@
 """Validate local checkpoint scheduler configuration without creating a checkpoint."""
 from __future__ import annotations
 
+import argparse
 import os
 import re
+import shlex
 import stat
 import sys
 from pathlib import Path
@@ -14,7 +16,54 @@ def fail(message: str) -> int:
     return 1
 
 
+def read_environment_file(path: Path) -> dict[str, str]:
+    """Parse simple KEY=VALUE assignments without executing shell code."""
+    values: dict[str, str] = {}
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        try:
+            tokens = shlex.split(raw_line, comments=True, posix=True)
+        except ValueError as error:
+            raise ValueError(f"invalid environment-file syntax on line {line_number}") from error
+        if not tokens:
+            continue
+        if len(tokens) != 1 or "=" not in tokens[0]:
+            raise ValueError(f"expected one KEY=VALUE assignment on line {line_number}")
+        name, value = tokens[0].split("=", 1)
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise ValueError(f"invalid environment variable name on line {line_number}")
+        values[name] = value
+    return values
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--env-file", type=Path, help="read configuration without executing it")
+    parser.add_argument(
+        "--print-interpreter",
+        action="store_true",
+        help="print the configured interpreter path only (for installer bootstrap)",
+    )
+    args = parser.parse_args()
+
+    if args.env_file is not None:
+        try:
+            configured = read_environment_file(args.env_file)
+        except (OSError, ValueError) as error:
+            return fail(f"cannot read configuration file ({type(error).__name__})")
+        if args.print_interpreter:
+            interpreter_value = configured.get("PRECOG_PYTHON", "")
+            interpreter = Path(interpreter_value).expanduser()
+            if not interpreter_value or not interpreter.is_absolute():
+                return fail("PRECOG_PYTHON must be an absolute path")
+            print(interpreter)
+            return 0
+        os.environ.update(configured)
+    elif args.print_interpreter:
+        return fail("--print-interpreter requires --env-file")
+
     required = (
         "PRECOG_REPO_DIR",
         "PRECOG_PYTHON",
@@ -62,7 +111,6 @@ def main() -> int:
         for directory, label in ((checkpoint_dir, "checkpoint directory"), (incident_log.parent, "incident-log directory")):
             if not directory.is_dir() or not os.access(directory, os.W_OK | os.X_OK):
                 return fail(f"{label} is not writable")
-        public_key_path.parent.mkdir(parents=True, exist_ok=True)
         if not public_key_path.is_file() or not os.access(public_key_path, os.R_OK):
             return fail(f"trusted public key is missing or unreadable: {public_key_path}")
         if not private_key_path.is_file() or not os.access(private_key_path, os.R_OK):
