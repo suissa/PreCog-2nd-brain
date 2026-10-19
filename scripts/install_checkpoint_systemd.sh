@@ -24,6 +24,10 @@ command -v systemctl >/dev/null || {
   echo "systemctl is required; this installer targets systemd user services." >&2
   exit 1
 }
+command -v python3 >/dev/null || {
+  echo "python3 is required to safely parse the environment file." >&2
+  exit 1
+}
 
 config_dir="$HOME/.config/precog"
 unit_dir="$HOME/.config/systemd/user"
@@ -120,9 +124,12 @@ EOF
   exit 0
 fi
 
-# The environment file is operator-owned. Source it only for this preflight process;
-# never print its values, especially DATABASE_URL.
-if ! /usr/bin/bash -c 'set -a; source "$1"; set +a; cd "$PRECOG_REPO_DIR"; exec "$PRECOG_PYTHON" scripts/checkpoint_preflight.py' _ "$env_file"; then
+# Parse as data, never source the operator-owned file as executable shell code.
+configured_python="$(python3 "$repo_dir/scripts/checkpoint_preflight.py" --env-file "$env_file" --print-interpreter)" || {
+  echo "Could not read PRECOG_PYTHON from $env_file; timers were not enabled." >&2
+  exit 1
+}
+if ! "$configured_python" "$repo_dir/scripts/checkpoint_preflight.py" --env-file "$env_file"; then
   echo "Preflight failed; timers were not enabled. Fix $env_file and re-run the installer." >&2
   exit 1
 fi
