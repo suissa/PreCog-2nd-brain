@@ -24,7 +24,8 @@ def main() -> int:
         "--max-checkpoint-age-seconds",
         type=float,
         default=os.getenv("PRECOG_MAX_CHECKPOINT_AGE_SECONDS"),
-        help="fail verify if the latest signed checkpoint is older than this many seconds",
+        help="fail verify if the latest signed checkpoint is older than this many seconds "
+        "(default: PRECOG_MAX_CHECKPOINT_AGE_SECONDS environment variable)",
     )
     parser.add_argument(
         "--incident-log",

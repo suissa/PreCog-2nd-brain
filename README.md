@@ -12,6 +12,7 @@ A ideia não é apenas armazenar conversas, resumir textos ou adicionar um banco
 - Para a modelagem de pressentimentos como inferência comportamental verificável, consulte [Precognição como inferência comportamental](docs/PRECOGNITION-BEHAVIORAL-STATES.md): estados propostos, fluxo técnico, avaliação prospectiva e guardrails científicos.
 
 - Operações de checkpoints assinados: [guia de verificação local e frescor](docs/AUDIT-CHECKPOINT-OPERATIONS.md).
+- Agendamento local de criação e verificação via systemd: [instalador](scripts/install_checkpoint_systemd.sh).
 
 ## 1. A evolução: COG + dreaming + knowledge graph
 
