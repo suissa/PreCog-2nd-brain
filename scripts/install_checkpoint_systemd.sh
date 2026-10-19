@@ -31,6 +31,7 @@ if [[ ! -e "$env_file" ]]; then
   umask 077
   cat > "$env_file" <<EOF
 PRECOG_REPO_DIR=$repo_dir
+PRECOG_PYTHON=/usr/bin/python3
 DATABASE_URL=
 PRECOG_CHECKPOINT_DIR=$HOME/.local/state/precog/checkpoints
 PRECOG_PUBLIC_KEY_DIR=$HOME/.config/precog/public-keys
@@ -54,7 +55,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 EnvironmentFile=%h/.config/precog/checkpoint.env
-ExecStart=/usr/bin/bash -c 'cd "$PRECOG_REPO_DIR" && exec python3 scripts/checkpoint_promotion_audit.py create'
+ExecStart=/usr/bin/bash -c 'cd "$PRECOG_REPO_DIR" && exec "${PRECOG_PYTHON:-python3}" scripts/checkpoint_promotion_audit.py create'
 EOF
 
 cat > "$unit_dir/precog-checkpoint-create.timer" <<'EOF'
@@ -79,7 +80,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 EnvironmentFile=%h/.config/precog/checkpoint.env
-ExecStart=/usr/bin/bash -c 'cd "$PRECOG_REPO_DIR" && exec python3 scripts/checkpoint_promotion_audit.py verify'
+ExecStart=/usr/bin/bash -c 'cd "$PRECOG_REPO_DIR" && exec "${PRECOG_PYTHON:-python3}" scripts/checkpoint_promotion_audit.py verify'
 EOF
 
 cat > "$unit_dir/precog-checkpoint-verify.timer" <<'EOF'
