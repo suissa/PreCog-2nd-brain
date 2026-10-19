@@ -57,4 +57,7 @@ Provide a one-shot job suitable for local cron/systemd, an atomic no-overwrite f
 ## Phase 18 — Checkpoint Freshness Monitoring
 Allow periodic verification to enforce a configured maximum age for the latest signed checkpoint, reject future or timezone-naive timestamps, and alert on stale evidence. Retain immutable re-attestations of an unchanged audit head so scheduled checkpoint creation can refresh freshness without overwriting historical files. The freshness threshold is explicit and configurable; no threshold means integrity reconciliation without an age policy.
 
+## Phase 19 — Local Scheduled Audit Operations
+Provide a user-level systemd installer with separate persistent timers for checkpoint creation and verification, private environment-file permissions, journal-based operational visibility, and safe handling of existing configuration. The installer must not enable lingering or modify host-wide policy implicitly. Failures exit non-zero so host monitoring can alert; local timers and journals remain inside the user's host trust boundary.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
