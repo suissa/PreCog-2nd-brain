@@ -64,3 +64,6 @@ Provide a user-level systemd installer with separate persistent timers for check
 Validate configuration, interpreter and repository paths, PostgreSQL connectivity, Ed25519 key-pair consistency and permissions, and writable local paths before enabling scheduled jobs. A newly created template must never activate timers automatically. Preflight must not expose secrets or claim to verify audit-history integrity.
 
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
+
+## Phase 21 — Operational Acceptance Evidence
+Provide an explicit user-level systemd acceptance command that distinguishes safe, read-only timer checks from opt-in execution of real checkpoint jobs. Document host prerequisites, journal inspection, and evidence retention. Automated tests verify the acceptance command's safety contract; they do not claim a real Linux/systemd/PostgreSQL host run.
