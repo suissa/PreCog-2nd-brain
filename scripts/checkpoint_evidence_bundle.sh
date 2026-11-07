@@ -16,30 +16,31 @@ output=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --output)
-      [[ $# -ge 2 ]] || { echo "--output requires a directory" >&2; exit 2; }
+      [[ $# -ge 2 && -n "$2" ]] || { echo "--output requires a directory" >&2; exit 2; }
       output="$2"
       shift 2
       ;;
-    -h|--help)
-      usage
-      exit 0
-      ;;
-    *)
-      usage >&2
-      exit 2
-      ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
   esac
 done
 
 command -v systemctl >/dev/null || { echo "systemctl is required" >&2; exit 1; }
 command -v journalctl >/dev/null || { echo "journalctl is required" >&2; exit 1; }
+command -v sha256sum >/dev/null || { echo "sha256sum is required" >&2; exit 1; }
 
 if [[ -z "$output" ]]; then
   output="evidence/checkpoint-$(date -u +%Y%m%dT%H%M%SZ)"
 fi
 
+# Refuse to overwrite or follow an existing destination; evidence is immutable.
+if [[ -e "$output" || -L "$output" ]]; then
+  echo "Refusing to overwrite existing evidence destination: $output" >&2
+  exit 1
+fi
 umask 077
-mkdir -p "$output"
+mkdir -p -- "$(dirname -- "$output")"
+mkdir -- "$output"
 
 redact() {
   sed -E \
@@ -51,11 +52,12 @@ redact() {
 capture() {
   local name="$1"
   shift
-  if "$@" 2>&1 | redact > "$output/$name"; then
-    return 0
+  local rc=0
+  "$@" 2>&1 | redact > "$output/$name" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    printf 'COMMAND_FAILED (exit=%s): %q\n' "$rc" "$*" >> "$output/$name"
+    return 1
   fi
-  printf 'COMMAND_FAILED: %q\n' "$*" | redact > "$output/$name"
-  return 1
 }
 
 cat > "$output/manifest.txt" <<EOF
@@ -77,7 +79,11 @@ capture create_service.txt systemctl --user show precog-checkpoint-create.servic
 capture verify_service.txt systemctl --user show precog-checkpoint-verify.service --property=Id,LoadState,ActiveState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp || failed=1
 capture journal.txt journalctl --user -u precog-checkpoint-create.service -u precog-checkpoint-verify.service --no-pager -n 100 || failed=1
 
-sha256sum "$output"/* > "$output/SHA256SUMS"
+# Exclude the checksum file itself; use relative paths for portable verification.
+(
+  cd "$output"
+  find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+)
 printf 'Evidence bundle: %s\n' "$output"
 if [[ "$failed" -ne 0 ]]; then
   echo 'One or more evidence commands failed; bundle is partial.' >&2
