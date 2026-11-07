@@ -69,4 +69,7 @@ Provide an explicit user-level systemd acceptance command that distinguishes saf
 ## Phase 22 — Evidence Bundle Capture
 Capture reproducible host-level evidence for the checkpoint scheduler without changing systemd state. Record timer/service state and recent journal output in a permission-restricted local bundle, redact common credential/token forms, generate SHA-256 checksums, and explicitly distinguish operational evidence from audit-history integrity proof and deployment authorization.
 
+## Phase 23 — Evidence Bundle Integrity and Immutability
+Refuse to overwrite an existing evidence destination, produce portable relative-path SHA-256 manifests that exclude themselves, and document independent checksum verification. Preserve partial-capture failure status and test the safety guarantees deterministically. Checksums detect accidental or later modification but do not authenticate the bundle against an attacker able to replace both files and manifest.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
