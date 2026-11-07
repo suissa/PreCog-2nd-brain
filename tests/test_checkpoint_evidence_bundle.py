@@ -14,7 +14,8 @@ def test_evidence_bundle_help_is_read_only() -> None:
         text=True,
     )
     assert result.returncode == 0
-    assert "does not install, enable, start, stop, or modify" in result.stdout
+    normalized = " ".join(result.stdout.split())
+    assert "does not install, enable, start, stop, or modify" in normalized
 
 
 def test_evidence_bundle_rejects_unknown_options() -> None:
