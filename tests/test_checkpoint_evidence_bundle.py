@@ -46,3 +46,16 @@ def test_evidence_bundle_redacts_common_secret_forms() -> None:
     assert "[REDACTED]" in content
     assert "PASSWORD|SECRET|TOKEN|PRIVATE_KEY" in content
     assert "postgres(ql)?://" in content
+
+
+def test_evidence_bundle_refuses_existing_destination() -> None:
+    content = SCRIPT.read_text()
+    assert '[[ -e "$output" || -L "$output" ]]' in content
+    assert "Refusing to overwrite existing evidence destination" in content
+
+
+def test_checksum_excludes_itself_and_uses_relative_paths() -> None:
+    content = SCRIPT.read_text()
+    assert '! -name SHA256SUMS' in content
+    assert 'cd "$output"' in content
+    assert 'sha256sum > SHA256SUMS' in content
