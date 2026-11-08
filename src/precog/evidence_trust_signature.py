@@ -42,28 +42,40 @@ def sign_trust_registry(registry_path: Path, *, private_key_path: Path) -> Path:
     signature_path = registry_path.with_name(registry_path.name + SIGNATURE_SUFFIX)
     if signature_path.exists() or signature_path.is_symlink():
         raise FileExistsError(f"refusing to overwrite {signature_path}")
-    signature = base64.b64encode(_private_key(private_key_path).sign(_canonical(registry))) + b"\n"
+    signature = base64.b64encode(_private_key(private_key_path).sign(_canonical(registry))) + b"\\n"
     fd = os.open(signature_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as stream:
         stream.write(signature)
     return signature_path
 
 
-def verify_signed_trust_registry(
+def load_verified_trust_registry(
     registry_path: Path, *, root_public_key_path: Path
-) -> tuple[bool, tuple[str, ...]]:
-    """Verify registry authenticity against an independently provisioned root public key."""
+) -> tuple[dict[str, Any] | None, tuple[str, ...]]:
+    """Read once and return the exact registry snapshot authenticated by its detached signature."""
     signature_path = registry_path.with_name(registry_path.name + SIGNATURE_SUFFIX)
     try:
         if registry_path.is_symlink() or not registry_path.is_file():
             raise ValueError("trust registry must be a regular, non-symlink file")
         if signature_path.is_symlink() or not signature_path.is_file():
             raise ValueError("trust registry signature must be a regular, non-symlink file")
-        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+        registry_bytes = registry_path.read_bytes()
+        signature_bytes = signature_path.read_bytes()
+        registry = json.loads(registry_bytes)
         if not isinstance(registry, dict) or registry.get("version") != 1 or not isinstance(registry.get("keys"), dict):
             raise ValueError("invalid trust registry structure")
-        signature = base64.b64decode(signature_path.read_bytes().strip(), validate=True)
+        signature = base64.b64decode(signature_bytes.strip(), validate=True)
         _public_key(root_public_key_path).verify(signature, _canonical(registry))
-        return True, ()
+        return registry, ()
     except (OSError, ValueError, TypeError, json.JSONDecodeError, InvalidSignature) as exc:
-        return False, (f"trust registry signature verification failed: {type(exc).__name__}: {exc}",)
+        return None, (f"trust registry signature verification failed: {type(exc).__name__}: {exc}",)
+
+
+def verify_signed_trust_registry(
+    registry_path: Path, *, root_public_key_path: Path
+) -> tuple[bool, tuple[str, ...]]:
+    """Compatibility wrapper verifying registry authenticity against an out-of-band root key."""
+    registry, errors = load_verified_trust_registry(
+        registry_path, root_public_key_path=root_public_key_path
+    )
+    return registry is not None, errors
