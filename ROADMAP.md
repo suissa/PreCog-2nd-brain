@@ -79,3 +79,6 @@ Every phase exits with deterministic tests and an explicit evaluation artifact. 
 
 ## Phase 25 — Trusted Signer Registry and Revocation
 Resolve evidence signer identities only through an independently provisioned local trust registry. Define active, retired and revoked key states; retain retired keys for historical verification; reject revoked/unknown keys, malformed registries, path traversal, symlinked trust material and mismatched expected identities. Document rotation and incident response while explicitly retaining the local host trust boundary.
+
+## Phase 26 — Authenticated Trust Registry
+Sign canonical trust-registry content with a detached Ed25519 signature rooted in an independently provisioned public key. Verify registry authenticity before resolving evidence signer identities; refuse overwrite and symlinked registry/signature files. Publish immutable versioned registry snapshots and document root-key custody and rollback limitations. This phase does not claim rollback resistance without an independent monotonic anchor.
