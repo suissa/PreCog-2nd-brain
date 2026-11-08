@@ -69,7 +69,7 @@ def sign_bundle(bundle: Path, *, private_key_path: Path, key_id: str) -> Path:
     fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(document, stream, sort_keys=True, indent=2, ensure_ascii=False)
-        stream.write("\\n")
+        stream.write("\n")
     return destination
 
 
