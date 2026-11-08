@@ -4,7 +4,12 @@ from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from precog.evidence_trust_signature import sign_trust_registry, verify_signed_trust_registry
+from precog.evidence_trust import verify_with_trust_store
+from precog.evidence_trust_signature import (
+    load_verified_trust_registry,
+    sign_trust_registry,
+    verify_signed_trust_registry,
+)
 
 
 def _keys(tmp_path: Path) -> tuple[Path, Path]:
@@ -81,3 +86,33 @@ def test_signed_registry_refuses_overwrite_and_symlinks(tmp_path: Path) -> None:
     registry_link.symlink_to(registry)
     valid, errors = verify_signed_trust_registry(registry_link, root_public_key_path=public)
     assert not valid and errors
+
+
+
+def test_verification_uses_the_exact_authenticated_registry_snapshot(tmp_path: Path) -> None:
+    private, public = _keys(tmp_path)
+    registry_path = _registry(tmp_path)
+    sign_trust_registry(registry_path, private_key_path=private)
+
+    registry_snapshot, errors = load_verified_trust_registry(
+        registry_path, root_public_key_path=public
+    )
+    assert registry_snapshot is not None and not errors
+
+    # Simulate replacement after signature validation. The verifier must not
+    # re-open the path and consume this unauthenticated replacement.
+    registry_path.write_text(json.dumps({
+        "version": 1,
+        "keys": {"attacker": {"public_key": "attacker.pem", "status": "revoked"}},
+    }))
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "ATTESTATION.json").write_text(json.dumps({"key_id": "attacker"}))
+
+    valid, verify_errors = verify_with_trust_store(
+        bundle,
+        trust_store_path=registry_path,
+        registry_data=registry_snapshot,
+    )
+    assert not valid
+    assert "unknown signing key: attacker" in " ".join(verify_errors)
