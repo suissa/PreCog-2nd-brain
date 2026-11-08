@@ -72,4 +72,7 @@ Capture reproducible host-level evidence for the checkpoint scheduler without ch
 ## Phase 23 — Evidence Bundle Integrity and Immutability
 Refuse to overwrite an existing evidence destination, produce portable relative-path SHA-256 manifests that exclude themselves, and document independent checksum verification. Preserve partial-capture failure status and test the safety guarantees deterministically. Checksums detect accidental or later modification but do not authenticate the bundle against an attacker able to replace both files and manifest.
 
+## Phase 24 — Cryptographically Attested Operational Evidence
+Create detached Ed25519 attestations binding the exact inventory and SHA-256 digest of every evidence file, with a stable key ID and algorithm/version metadata. Verify signature, trusted key identity, file inventory and content before evidence is accepted. Refuse attestation overwrite and symlinked evidence; retain public keys by key ID for rotation and historical verification. This authenticates the bundle against a trusted signer but does not prove host truthfulness or deployment authorization.
+
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
