@@ -24,11 +24,17 @@ def _load_registry(path: Path) -> dict[str, Any]:
 
 
 def verify_with_trust_store(
-    bundle: Path, *, trust_store_path: Path, expected_key_id: str | None = None
+    bundle: Path,
+    *,
+    trust_store_path: Path,
+    expected_key_id: str | None = None,
+    registry_data: dict[str, Any] | None = None,
 ) -> tuple[bool, tuple[str, ...]]:
-    """Resolve a signer only from the external registry; revoked/unknown keys fail closed."""
+    """Resolve signer policy from a supplied authenticated snapshot or a local registry file."""
     try:
-        registry = _load_registry(trust_store_path)
+        registry = registry_data if registry_data is not None else _load_registry(trust_store_path)
+        if not isinstance(registry, dict) or registry.get("version") != 1 or not isinstance(registry.get("keys"), dict):
+            raise ValueError("invalid trust registry structure")
         attestation_path = bundle / "ATTESTATION.json"
         if attestation_path.is_symlink() or not attestation_path.is_file():
             raise ValueError("bundle attestation must be a regular, non-symlink file")

@@ -82,3 +82,7 @@ Resolve evidence signer identities only through an independently provisioned loc
 
 ## Phase 26 — Authenticated Trust Registry
 Sign canonical trust-registry content with a detached Ed25519 signature rooted in an independently provisioned public key. Verify registry authenticity before resolving evidence signer identities; refuse overwrite and symlinked registry/signature files. Publish immutable versioned registry snapshots and document root-key custody and rollback limitations. This phase does not claim rollback resistance without an independent monotonic anchor.
+
+
+## Phase 27 — Single-Snapshot Trust Verification
+Authenticate and parse the signed trust registry from one read, then pass that exact in-memory snapshot through signer resolution and evidence verification. Do not re-open the registry path after signature validation. Preserve the compatibility verification API, add a regression test that simulates path replacement between authentication and use, and document the remaining local filesystem/key custody boundary. This closes the registry reread TOCTOU window; it does not provide rollback resistance against replacement by an older, validly signed registry.
