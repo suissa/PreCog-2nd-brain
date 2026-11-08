@@ -86,3 +86,7 @@ Sign canonical trust-registry content with a detached Ed25519 signature rooted i
 
 ## Phase 27 — Single-Snapshot Trust Verification
 Authenticate and parse the signed trust registry from one read, then pass that exact in-memory snapshot through signer resolution and evidence verification. Do not re-open the registry path after signature validation. Preserve the compatibility verification API, add a regression test that simulates path replacement between authentication and use, and document the remaining local filesystem/key custody boundary. This closes the registry reread TOCTOU window; it does not provide rollback resistance against replacement by an older, validly signed registry.
+
+
+## Phase 28 — Independent Monotonic Trust-Registry Anchor
+Add an optional fail-closed HTTPS verification path that compares the exact authenticated registry snapshot against an independently operated monotonic head. Bind the registry sequence and canonical SHA-256 digest in a separate Ed25519-signed anchor response; require a fresh request nonce to prevent replay; reject rollback, forward divergence, same-sequence content changes, malformed responses, bad signatures and non-HTTPS endpoints. Keep the anchor signing key separately provisioned. Document the external service's atomic monotonic-write, publisher-authentication, durability and isolation requirements. The repository supplies the verifier client and protocol contract; it does not pretend a same-host file or database is an independent anchor.
