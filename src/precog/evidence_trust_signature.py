@@ -42,7 +42,7 @@ def sign_trust_registry(registry_path: Path, *, private_key_path: Path) -> Path:
     signature_path = registry_path.with_name(registry_path.name + SIGNATURE_SUFFIX)
     if signature_path.exists() or signature_path.is_symlink():
         raise FileExistsError(f"refusing to overwrite {signature_path}")
-    signature = base64.b64encode(_private_key(private_key_path).sign(_canonical(registry))) + b"\\n"
+    signature = base64.b64encode(_private_key(private_key_path).sign(_canonical(registry))) + b"\n"
     fd = os.open(signature_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as stream:
         stream.write(signature)
