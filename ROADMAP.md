@@ -76,3 +76,6 @@ Refuse to overwrite an existing evidence destination, produce portable relative-
 Create detached Ed25519 attestations binding the exact inventory and SHA-256 digest of every evidence file, with a stable key ID and algorithm/version metadata. Verify signature, trusted key identity, file inventory and content before evidence is accepted. Refuse attestation overwrite and symlinked evidence; retain public keys by key ID for rotation and historical verification. This authenticates the bundle against a trusted signer but does not prove host truthfulness or deployment authorization.
 
 Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
+
+## Phase 25 — Trusted Signer Registry and Revocation
+Resolve evidence signer identities only through an independently provisioned local trust registry. Define active, retired and revoked key states; retain retired keys for historical verification; reject revoked/unknown keys, malformed registries, path traversal, symlinked trust material and mismatched expected identities. Document rotation and incident response while explicitly retaining the local host trust boundary.
