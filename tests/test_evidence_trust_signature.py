@@ -55,7 +55,9 @@ def test_signed_registry_detects_tampering(tmp_path: Path) -> None:
 
 def test_signed_registry_rejects_wrong_root_and_missing_signature(tmp_path: Path) -> None:
     private, public = _keys(tmp_path)
-    _, wrong_public = _keys(tmp_path / "wrong") if (tmp_path / "wrong").mkdir() is None else (None, None)
+    wrong_dir = tmp_path / "wrong"
+    wrong_dir.mkdir()
+    _, wrong_public = _keys(wrong_dir)
     registry = _registry(tmp_path)
     sign_trust_registry(registry, private_key_path=private)
     valid, errors = verify_signed_trust_registry(registry, root_public_key_path=wrong_public)
