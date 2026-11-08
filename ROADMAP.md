@@ -63,7 +63,13 @@ Provide a user-level systemd installer with separate persistent timers for check
 ## Phase 20 — Preflight and Safe Activation
 Validate configuration, interpreter and repository paths, PostgreSQL connectivity, Ed25519 key-pair consistency and permissions, and writable local paths before enabling scheduled jobs. A newly created template must never activate timers automatically. Preflight must not expose secrets or claim to verify audit-history integrity.
 
-Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
-
 ## Phase 21 — Operational Acceptance Evidence
 Provide an explicit user-level systemd acceptance command that distinguishes safe, read-only timer checks from opt-in execution of real checkpoint jobs. Document host prerequisites, journal inspection, and evidence retention. Automated tests verify the acceptance command's safety contract; they do not claim a real Linux/systemd/PostgreSQL host run.
+
+## Phase 22 — Evidence Bundle Capture
+Capture reproducible host-level evidence for the checkpoint scheduler without changing systemd state. Record timer/service state and recent journal output in a permission-restricted local bundle, redact common credential/token forms, generate SHA-256 checksums, and explicitly distinguish operational evidence from audit-history integrity proof and deployment authorization.
+
+## Phase 23 — Evidence Bundle Integrity and Immutability
+Refuse to overwrite an existing evidence destination, produce portable relative-path SHA-256 manifests that exclude themselves, and document independent checksum verification. Preserve partial-capture failure status and test the safety guarantees deterministically. Checksums detect accidental or later modification but do not authenticate the bundle against an attacker able to replace both files and manifest.
+
+Every phase exits with deterministic tests and an explicit evaluation artifact. No later phase may be required for correctness of an earlier phase. Promotion decisions never imply deployment or runtime authorization.
