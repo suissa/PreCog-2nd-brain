@@ -98,3 +98,7 @@ Implement a durable authority core separate from registry publisher/verifier tru
 
 ## Phase 30 — Anchor HTTP Transport
 Expose the Phase-29 authority through a WSGI-compatible HTTP adapter. Provide a nonce-bound signed head GET endpoint and a publisher-signed checkpoint POST endpoint; enforce HTTPS at the trusted WSGI ingress boundary, bounded JSON bodies, strict request validation, safe cache/security headers and explicit error mapping. Test endpoint behavior, authorization failures, conflicts, malformed requests and body limits. This adapter is not a TLS terminator, deployment, mTLS configuration or rate limiter.
+
+
+## Phase 31 — Anchor Operational Hardening
+Add a tamper-evident hash chain to publisher receipts, verify it before state-changing and signed-head operations, reject ordinary log mutation/deletion, and expose a verifiable audit-head report. Support active, retired and revoked publisher key states so rotation and incident response do not require reusing key IDs. Cover legacy log migration, chain corruption, retired/revoked publishers and replacement-key publication. Document independent audit-head retention and restore quarantine: a local hash chain and SQLite durability settings cannot prevent a privileged host administrator from rewriting or rolling back the entire database. Production key custody, external audit-head retention, independent backups and service deployment remain operational responsibilities.

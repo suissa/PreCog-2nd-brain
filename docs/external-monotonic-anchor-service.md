@@ -34,3 +34,19 @@ Signed canonical fields: `version=1`, `sequence`, `registry_sha256`, `request_id
 - Responses set `Cache-Control: no-store`, `Pragma: no-cache` and `X-Content-Type-Options: nosniff`.
 
 By default the adapter requires WSGI `wsgi.url_scheme=https`. A TLS-terminating reverse proxy must be the only network ingress and must set the WSGI scheme from its authenticated TLS connection; do not trust arbitrary client-supplied forwarding headers. The adapter does not itself terminate TLS, implement mTLS, provision keys, provide rate limiting or deploy a WSGI server. Configure those at the trusted ingress/runtime boundary. Publisher signatures remain mandatory even behind the proxy.
+
+
+## Operational hardening (Phase 31)
+
+The authority now maintains a SHA-256 hash chain over accepted publish receipts. Each event binds the request ID, sequence, registry digest, publisher key ID, acceptance timestamp and previous event hash. Startup migrates legacy rows into a deterministic chain, then verifies the full chain. Publish transactions and signed-head reads verify it again and fail closed on a mismatch. SQLite triggers reject ordinary UPDATE and DELETE operations against the receipt log.
+
+Call `verify_audit_chain()` during operational checks and retain its `head_hash` outside the authority host. The local chain is tamper-evident, not independently immutable: an administrator able to rewrite the database and recompute the chain can replace it. The externally retained head (or Phase-28/29 independent anchor) is required to detect a fully rewritten or restored older database. Do not treat SQLite WAL/FULL as protection against host-level rollback.
+
+Publisher key lifecycle is configured with the `publisher_status` mapping:
+- `active`: accepted for new checkpoint publications.
+- `retired`: retained as trusted historical identity but cannot publish new checkpoints.
+- `revoked`: rejected for new publications following compromise or loss of trust.
+
+Rotation is performed by provisioning the replacement public key under a new key ID, marking it active, and retaining the prior public key as retired. A compromised key is marked revoked. The response-signing key remains a separate trust domain and requires its own out-of-band rotation and verifier pin update; this phase does not implement private-key storage or automated rotation.
+
+Operational recovery must compare the restored database's verified audit head and signed monotonic head against an independently retained value before serving traffic. If the independent anchor is unavailable, restoration must remain quarantined rather than silently accepting a potentially stale local backup. No production deployment, independent backup service, mTLS ingress, key vault or disaster-recovery execution is claimed by this repository.

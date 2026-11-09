@@ -76,3 +76,43 @@ def _attempt(service, request):
         return "ok"
     except AnchorConflict:
         return "conflict"
+
+
+def test_publisher_rotation_and_revocation(tmp_path: Path):
+    old_key = Ed25519PrivateKey.generate()
+    new_key = Ed25519PrivateKey.generate()
+    response = Ed25519PrivateKey.generate()
+    service = MonotonicAnchor(
+        tmp_path / "rotated.db", response,
+        {"publisher-old": old_key.public_key(), "publisher-new": new_key.public_key()},
+        publisher_status={"publisher-old": "retired", "publisher-new": "active"},
+    )
+    with pytest.raises(PublisherUnauthorized, match="retired"):
+        service.publish(signed_publish(old_key, 1, "a" * 64, "old", "publisher-old"))
+    accepted = signed_publish(new_key, 1, "b" * 64, "new", "publisher-new")
+    assert service.publish(accepted)["idempotent"] is False
+    revoked = MonotonicAnchor(
+        tmp_path / "revoked.db", response, {"publisher-old": old_key.public_key()},
+        publisher_status={"publisher-old": "revoked"},
+    )
+    with pytest.raises(PublisherUnauthorized, match="revoked"):
+        revoked.publish(signed_publish(old_key, 1, "c" * 64, "revoked", "publisher-old"))
+
+
+def test_audit_chain_verifies_and_detects_rewritten_history(authority):
+    service, publisher, _ = authority
+    service.publish(signed_publish(publisher, 1, "a" * 64, "first"))
+    service.publish(signed_publish(publisher, 2, "b" * 64, "second"))
+    report = service.verify_audit_chain()
+    assert report["valid"] is True
+    assert report["event_count"] == 2
+    assert len(report["head_hash"]) == 64
+
+    with service._connect() as conn:
+        conn.execute("DROP TRIGGER anchor_publish_log_no_update")
+        conn.execute("UPDATE anchor_publish_log SET registry_sha256=? WHERE request_id=?",
+                     ("f" * 64, "first"))
+    with pytest.raises(AnchorConflict, match="audit chain integrity"):
+        service.verify_audit_chain()
+    with pytest.raises(AnchorConflict, match="audit chain integrity"):
+        service.signed_head("fresh-after-tamper")
