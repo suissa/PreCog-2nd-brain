@@ -42,7 +42,10 @@ class AnchorWSGIApp:
         if path == "/v1/trust-registry/head":
             if method != "GET":
                 return self._json(start_response, "405 Method Not Allowed", {"error": "method_not_allowed"})
-            query = parse_qs(str(environ.get("QUERY_STRING", "")), keep_blank_values=True, strict_parsing=True)
+            try:
+                query = parse_qs(str(environ.get("QUERY_STRING", "")), keep_blank_values=True, strict_parsing=True)
+            except ValueError:
+                return self._json(start_response, "400 Bad Request", {"error": "malformed_query"})
             nonces = query.get("nonce", [])
             if set(query) != {"nonce"} or len(nonces) != 1:
                 return self._json(start_response, "400 Bad Request", {"error": "exactly_one_nonce_required"})
