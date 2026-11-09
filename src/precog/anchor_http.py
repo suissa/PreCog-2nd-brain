@@ -71,7 +71,7 @@ class AnchorWSGIApp:
             stream = environ.get("wsgi.input")
             if stream is None or not hasattr(stream, "read"):
                 return self._json(start_response, "400 Bad Request", {"error": "request_body_required"})
-            raw = stream.read(length)  # type: ignore[union-attr]
+            raw = stream.read(length)
             if len(raw) != length:
                 return self._json(start_response, "400 Bad Request", {"error": "incomplete_request_body"})
             try:
