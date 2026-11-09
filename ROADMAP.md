@@ -94,3 +94,7 @@ Add an optional fail-closed HTTPS verification path that compares the exact auth
 
 ## Phase 29 — External Monotonic Anchor Authority
 Implement a durable authority core separate from registry publisher/verifier trust domains. Authenticate checkpoint publishers with independently provisioned Ed25519 keys; atomically persist strictly increasing registry sequence and digest with idempotent request IDs; expose a signed nonce-bound head compatible with Phase 28. Cover rollback, conflicting sequence/digest, publisher authentication, idempotency and concurrent writers. SQLite is a single-authority reference backend; deployment, HTTPS adapter, mTLS, key custody and independent backup/restore controls remain operational responsibilities and are not claimed as deployed.
+
+
+## Phase 30 — Anchor HTTP Transport
+Expose the Phase-29 authority through a WSGI-compatible HTTP adapter. Provide a nonce-bound signed head GET endpoint and a publisher-signed checkpoint POST endpoint; enforce HTTPS at the trusted WSGI ingress boundary, bounded JSON bodies, strict request validation, safe cache/security headers and explicit error mapping. Test endpoint behavior, authorization failures, conflicts, malformed requests and body limits. This adapter is not a TLS terminator, deployment, mTLS configuration or rate limiter.
