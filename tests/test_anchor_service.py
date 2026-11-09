@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -59,9 +58,12 @@ def test_request_idempotency(authority):
         service.publish(signed_publish(publisher, 2, "b" * 64, "stable"))
 
 
-def test_concurrent_publishers_only_one_sequence_wins(authority):
+def test_concurrent_conflicting_checkpoints_only_one_wins(authority):
     service, publisher, _ = authority
-    requests = [signed_publish(publisher, n, hashlib.sha256(str(n).encode()).hexdigest(), f"r{n}") for n in (1, 2)]
+    requests = [
+        signed_publish(publisher, 1, hashlib.sha256(str(n).encode()).hexdigest(), f"r{n}")
+        for n in (1, 2)
+    ]
     with ThreadPoolExecutor(2) as pool:
         results = list(pool.map(lambda req: _attempt(service, req), requests))
     assert sum(result == "ok" for result in results) == 1
