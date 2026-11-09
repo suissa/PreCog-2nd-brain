@@ -22,3 +22,15 @@ Signed canonical fields: `version=1`, `sequence`, `registry_sha256`, `request_id
 - Restore must be operator-approved and prove sequence does not regress (e.g. compare against independent retained head); SQLite backup alone cannot prevent malicious rollback.
 - SQLite serializes writers with `BEGIN IMMEDIATE`; race tests cover concurrent sequence submissions. A production multi-replica service must use a shared database with equivalent serializable/CAS semantics, not per-replica SQLite.
 - No HTTP server, deployment, key generation, key storage, mTLS configuration or operational SLO is included. Phase 29 supplies tested authority primitives and protocol contract only.
+
+
+## HTTP transport (Phase 30)
+
+`precog.anchor_http.AnchorWSGIApp` exposes the authority through a WSGI-compatible adapter:
+- `GET /v1/trust-registry/head?nonce=...` returns the signed Phase-28 envelope.
+- `POST /v1/trust-registry/checkpoints` accepts the Ed25519-authenticated publish request.
+- Requires exactly one nonce, JSON content type, bounded 16 KiB request body and complete Content-Length.
+- Uses explicit HTTP status mapping for malformed requests, unauthorized publishers, monotonic conflicts and uninitialized authority.
+- Responses set `Cache-Control: no-store`, `Pragma: no-cache` and `X-Content-Type-Options: nosniff`.
+
+By default the adapter requires WSGI `wsgi.url_scheme=https`. A TLS-terminating reverse proxy must be the only network ingress and must set the WSGI scheme from its authenticated TLS connection; do not trust arbitrary client-supplied forwarding headers. The adapter does not itself terminate TLS, implement mTLS, provision keys, provide rate limiting or deploy a WSGI server. Configure those at the trusted ingress/runtime boundary. Publisher signatures remain mandatory even behind the proxy.
