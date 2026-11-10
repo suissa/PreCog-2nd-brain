@@ -10,7 +10,15 @@ from precog.anchor_recovery import (
 )
 from precog.anchor_service import MonotonicAnchor
 
-from test_anchor_service import signed_publish
+import base64
+
+from precog.anchor_service import canonical_json
+
+
+def signed_publish(key, sequence, digest, request_id, key_id):
+    payload = {"version": 1, "sequence": sequence, "registry_sha256": digest,
+               "request_id": request_id, "publisher_key_id": key_id}
+    return {**payload, "signature": base64.b64encode(key.sign(canonical_json(payload))).decode()}
 
 
 def test_recovery_checkpoint_matches_restored_state(tmp_path):
