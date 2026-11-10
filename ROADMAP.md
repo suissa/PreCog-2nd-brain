@@ -102,3 +102,7 @@ Expose the Phase-29 authority through a WSGI-compatible HTTP adapter. Provide a 
 
 ## Phase 31 — Anchor Operational Hardening
 Add a tamper-evident hash chain to publisher receipts, verify it before state-changing and signed-head operations, reject ordinary log mutation/deletion, and expose a verifiable audit-head report. Support active, retired and revoked publisher key states so rotation and incident response do not require reusing key IDs. Cover legacy log migration, chain corruption, retired/revoked publishers and replacement-key publication. Document independent audit-head retention and restore quarantine: a local hash chain and SQLite durability settings cannot prevent a privileged host administrator from rewriting or rolling back the entire database. Production key custody, external audit-head retention, independent backups and service deployment remain operational responsibilities.
+
+
+## Phase 32 — Independent Recovery Checkpoints and Key Custody
+Create a detached Ed25519-signed recovery checkpoint binding authority identity, monotonic registry head, verified audit-chain head and capture time. Verify restored databases against independently retained checkpoints and fail closed on stale/divergent state, unknown keys or unavailable trust material. Document separate publisher, online response and recovery key custody, historical verification and rotation procedures, plus a mandatory restore quarantine runbook. Do not claim integrated vault/HSM/WORM storage or deployed disaster-recovery execution.
