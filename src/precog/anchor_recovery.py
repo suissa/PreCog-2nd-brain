@@ -25,7 +25,11 @@ class RecoveryCheckpointError(ValueError):
 
 
 def _current_state(authority: MonotonicAnchor) -> dict[str, Any]:
-    with authority._connect() as conn:
+    conn = authority._connect()
+    try:
+        # Pin all reads to one SQLite snapshot so a concurrent publish cannot
+        # produce a checkpoint assembled from two different authority states.
+        conn.execute("BEGIN")
         count, audit_head = authority._verify_audit_chain(conn)
         head = conn.execute(
             "SELECT sequence, registry_sha256 FROM anchor_head WHERE singleton=1"
@@ -34,20 +38,27 @@ def _current_state(authority: MonotonicAnchor) -> dict[str, Any]:
             """SELECT sequence, registry_sha256 FROM anchor_publish_log
                ORDER BY sequence DESC, request_id DESC LIMIT 1"""
         ).fetchone()
-    if head is None:
-        if count or last is not None:
-            raise RecoveryCheckpointError("anchor head missing while audit receipts exist")
-        sequence, digest = 0, None
-    else:
-        sequence, digest = head
-        if last != (sequence, digest):
-            raise RecoveryCheckpointError("anchor head diverges from verified audit receipts")
-    return {
-        "sequence": sequence,
-        "registry_sha256": digest,
-        "audit_event_count": count,
-        "audit_head_hash": audit_head,
-    }
+        if head is None:
+            if count or last is not None:
+                raise RecoveryCheckpointError("anchor head missing while audit receipts exist")
+            sequence, digest = 0, None
+        else:
+            sequence, digest = head
+            if last != (sequence, digest):
+                raise RecoveryCheckpointError("anchor head diverges from verified audit receipts")
+        conn.execute("COMMIT")
+        return {
+            "sequence": sequence,
+            "registry_sha256": digest,
+            "audit_event_count": count,
+            "audit_head_hash": audit_head,
+        }
+    except Exception:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+    finally:
+        conn.close()
 
 
 def create_recovery_checkpoint(
