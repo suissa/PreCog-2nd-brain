@@ -94,8 +94,10 @@ def test_recovery_drill_fails_closed_when_checkpoint_is_missing(tmp_path):
 
 
 def test_recovery_drill_reports_corrupt_database_without_exposing_details(tmp_path):
-    database = tmp_path / "anchor.db"
-    _, publisher, response, recovery, evidence_key, checkpoint = setup_anchor(database)
+    valid_database = tmp_path / "anchor.db"
+    _, publisher, response, recovery, evidence_key, checkpoint = setup_anchor(valid_database)
+    # Use a distinct path with no SQLite WAL/SHM sidecars that could mask corruption.
+    database = tmp_path / "corrupt.db"
     database.write_bytes(b"not a sqlite database")
 
     evidence = run(database, checkpoint, response, recovery, publisher, evidence_key)
@@ -109,7 +111,7 @@ def test_recovery_drill_evidence_rejects_tampering_and_unknown_signer(tmp_path):
     database = tmp_path / "anchor.db"
     _, publisher, response, recovery, evidence_key, checkpoint = setup_anchor(database)
     evidence = run(database, checkpoint, response, recovery, publisher, evidence_key)
-    evidence["payload"]["status"] = "passed"
+    evidence["payload"]["run_id"] = "tampered-run"
 
     import pytest
     from precog.recovery_drill import RecoveryDrillError
@@ -119,7 +121,7 @@ def test_recovery_drill_evidence_rejects_tampering_and_unknown_signer(tmp_path):
             evidence, {"drill-audit": evidence_key.public_key()},
             expected_authority_id="anchor-prod",
         )
-    evidence["payload"]["status"] = "failed"
+    evidence["payload"]["run_id"] = "drill-1"
     with pytest.raises(RecoveryDrillError, match="untrusted"):
         verify_recovery_drill_evidence(
             evidence, {}, expected_authority_id="anchor-prod"
