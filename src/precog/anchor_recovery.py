@@ -120,6 +120,8 @@ def verify_recovery_checkpoint(
     except (InvalidSignature, ValueError, TypeError, binascii.Error) as exc:
         raise RecoveryCheckpointError("invalid recovery checkpoint signature") from exc
     timestamp = payload.get("created_at")
+    if not isinstance(timestamp, str):
+        raise RecoveryCheckpointError("invalid recovery checkpoint timestamp")
     try:
         parsed = datetime.fromisoformat(timestamp)
     except (TypeError, ValueError) as exc:
