@@ -106,3 +106,16 @@ Add a tamper-evident hash chain to publisher receipts, verify it before state-ch
 
 ## Phase 32 — Independent Recovery Checkpoints and Key Custody
 Create a detached Ed25519-signed recovery checkpoint binding authority identity, monotonic registry head, verified audit-chain head and capture time. Verify restored databases against independently retained checkpoints and fail closed on stale/divergent state, unknown keys or unavailable trust material. Document separate publisher, online response and recovery key custody, historical verification and rotation procedures, plus a mandatory restore quarantine runbook. Do not claim integrated vault/HSM/WORM storage or deployed disaster-recovery execution.
+
+
+## Phase 33 — Automated Backup Verification and Recovery Drill
+Add a repeatable recovery-drill API that uses SQLite's online backup mechanism to
+capture a consistent snapshot without mutating the source database, verifies SQLite
+integrity, restores into a fresh isolated target, and compares the restored authority
+with an independently retained signed recovery checkpoint. Fail closed for missing
+trust material, rollback, divergence, corrupt backup or restore failure; never refresh
+a checkpoint after a failed verification. Produce a detached Ed25519-signed,
+privacy-minimized drill report with backup/checkpoint digests and a verifiable result.
+Test successful restore, stale checkpoint, missing checkpoint, corrupt database and
+evidence tampering. CI uses temporary local databases and does not claim production
+DR deployment, external WORM storage, HSM/vault integration or scheduled drills.
