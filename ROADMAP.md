@@ -119,3 +119,17 @@ privacy-minimized drill report with backup/checkpoint digests and a verifiable r
 Test successful restore, stale checkpoint, missing checkpoint, corrupt database and
 evidence tampering. CI uses temporary local databases and does not claim production
 DR deployment, external WORM storage, HSM/vault integration or scheduled drills.
+
+
+## Phase 34 — External Backup Storage and Retention
+Add a provider-neutral object-store contract for immutable, content-addressed
+archives containing a consistent SQLite backup and its independently signed
+recovery checkpoint. Bind both objects to a signed manifest with authority,
+sequence, hashes, size and retention deadline. Verify the exact captured snapshot
+against its checkpoint before upload; publish the manifest last. Restore only after
+manifest signature, object hashes, retention metadata, SQLite integrity and
+checkpoint equality all validate. Support verified historical manifest listing and
+retention-aware pruning that never requests early deletion. Keep provider credentials,
+WORM/object-lock enforcement, external account/region configuration and lifecycle
+scheduling outside the core; the test adapter must not be represented as durable or
+independent storage.
